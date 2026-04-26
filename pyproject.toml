@@ -1,0 +1,31 @@
+[project]
+name = "ha-speedport"
+version = "1.0.0"
+description = "Telekom Speedport integration for Home Assistant"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "pycryptodome>=3.23.0",
+    "pytz>=2026.1.post1",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "CHART"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+show_error_codes = true
+ignore_missing_imports = true
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
