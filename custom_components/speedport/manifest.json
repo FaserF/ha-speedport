@@ -7,8 +7,8 @@
   "iot_class": "local_polling",
   "version": "1.0.1",
   "requirements": [
-    "pycryptodome>=3.23.0",
-    "pytz>=2026.1.post1"
+    "pycryptodome==3.23.0",
+    "pytz==2026.1.post1"
   ],
   "dhcp": [
     {
