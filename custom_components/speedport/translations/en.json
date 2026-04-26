@@ -1,0 +1,77 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Telekom Speedport",
+        "description": "Configure your Telekom Speedport router",
+        "data": {
+          "host": "Host or IP address",
+          "password": "Router password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to Speedport router",
+      "invalid_auth": "Incorrect password",
+      "unknown": "An unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This Speedport router is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Speedport Options",
+        "data": {
+          "update_interval": "Update interval (seconds)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "router_state": {"name": "Router State"},
+      "online_status": {"name": "Online Status"},
+      "public_ip_v4": {"name": "Public IPv4"},
+      "public_ip_v6": {"name": "Public IPv6"},
+      "dsl_downstream": {"name": "DSL Downstream Speed"},
+      "dsl_upstream": {"name": "DSL Upstream Speed"},
+      "inet_download": {"name": "Internet Download"},
+      "inet_upload": {"name": "Internet Upload"},
+      "wlan_ssid": {"name": "WLAN SSID (2.4 GHz)"},
+      "wlan_5ghz_ssid": {"name": "WLAN SSID (5 GHz)"},
+      "wlan_guest_ssid": {"name": "Guest WLAN SSID"},
+      "firmware_version": {"name": "Firmware Version"},
+      "dns_v4": {"name": "DNS Server (IPv4)"},
+      "connected_devices_count": {"name": "Connected Devices"},
+      "dsl_link_status": {"name": "DSL Link Status"},
+      "inet_uptime": {"name": "Internet Uptime"},
+      "dsl_pop": {"name": "DSL Access Point (PoP)"},
+      "ex5g_signal_5g": {"name": "5G Signal Strength"},
+      "ex5g_freq_5g": {"name": "5G Frequency"},
+      "ex5g_signal_lte": {"name": "LTE Signal Strength"},
+      "ex5g_freq_lte": {"name": "LTE Frequency"}
+    },
+    "binary_sensor": {
+      "online": {"name": "Internet Connection"},
+      "dsl_link": {"name": "DSL Link"},
+      "use_wlan": {"name": "WiFi Active"},
+      "wlan_guest_active": {"name": "Guest WiFi Active"},
+      "dualstack": {"name": "Dual Stack (IPv4+IPv6)"},
+      "dsl_tunnel": {"name": "DSL Tunnel"},
+      "lte_tunnel": {"name": "LTE Tunnel"},
+      "hybrid_tunnel": {"name": "Hybrid Tunnel"}
+    },
+    "switch": {
+      "wifi": {"name": "WiFi"},
+      "wifi_guest": {"name": "Guest WiFi"},
+      "wifi_office": {"name": "Office WiFi"}
+    },
+    "button": {
+      "reboot": {"name": "Reboot Router"},
+      "reconnect": {"name": "Reconnect Internet"},
+      "wps_on": {"name": "Enable WPS"}
+    }
+  }
+}

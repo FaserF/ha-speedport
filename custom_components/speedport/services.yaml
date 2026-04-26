@@ -1,0 +1,6 @@
+reboot:
+  description: "Reboots the Speedport router."
+reconnect:
+  description: "Reconnects the internet connection to get a new public IP."
+wps_on:
+  description: "Activates WPS for 2 minutes."

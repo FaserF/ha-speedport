@@ -1,0 +1,73 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release Type'
+        required: true
+        type: choice
+        options: [stable, beta, nightly]
+      bump_level:
+        description: 'Bump Level (for stable/beta)'
+        required: true
+        type: choice
+        default: patch
+        options: [major, minor, patch]
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions: {contents: write, packages: write}
+    steps:
+      - uses: actions/checkout@v6
+        with: {fetch-depth: 0}
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with: {python-version: '3.14.4'}
+      - name: Calculate Version
+        id: version
+        run: |
+          NEW_VERSION=$(python .github/scripts/version_manager.py bump --type ${{ inputs.release_type }} --level ${{ inputs.bump_level }})
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+      - name: Create Release Tag
+        if: inputs.release_type != 'nightly'
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git commit -am "chore(release): bump version to ${{ steps.version.outputs.version }}"
+          git tag v${{ steps.version.outputs.version }}
+          git push origin v${{ steps.version.outputs.version }}
+          git push origin main
+      - name: Find Previous Tag
+        id: pre_tag
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
+      - name: Generate Changelog
+        if: inputs.release_type != 'nightly'
+        run: |
+          python .github/scripts/changelog_builder.py --from-tag "${{ steps.pre_tag.outputs.tag }}" --repo-url "https://github.com/${{ github.repository }}" --output "CHANGELOG_BODY.md"
+      - name: Zip Component
+        id: zip
+        if: inputs.release_type != 'nightly'
+        run: |
+          DOMAIN=$(basename $(ls -d custom_components/*/ | grep -v "__pycache__" | head -n 1))
+          echo "Found domain: $DOMAIN"
+          echo "DOMAIN=$DOMAIN" >> $GITHUB_ENV
+          cd custom_components
+          zip -r ../$DOMAIN.zip $DOMAIN
+          cd ..
+      - name: Create Release Notes
+        uses: softprops/action-gh-release@v3
+        if: inputs.release_type != 'nightly'
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          body_path: CHANGELOG_BODY.md
+          prerelease: ${{ inputs.release_type == 'beta' }}
+          files: ${{ env.DOMAIN }}.zip
+      - name: Post-Release Dev Bump
+        if: inputs.release_type != 'nightly'
+        run: |
+          NEW_DEV=$(python .github/scripts/version_manager.py bump --type dev)
+          git commit -am "chore(dev): bump to $NEW_DEV"
+          git push origin main

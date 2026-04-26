@@ -1,0 +1,77 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Telekom Speedport",
+        "description": "Konfiguriere deinen Telekom Speedport Router",
+        "data": {
+          "host": "Host oder IP-Adresse",
+          "password": "Router-Passwort"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum Speedport Router nicht möglich",
+      "invalid_auth": "Falsches Passwort",
+      "unknown": "Ein unerwarteter Fehler ist aufgetreten"
+    },
+    "abort": {
+      "already_configured": "Dieser Speedport Router ist bereits konfiguriert"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Speedport Optionen",
+        "data": {
+          "update_interval": "Aktualisierungsintervall (Sekunden)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "router_state": {"name": "Router-Status"},
+      "online_status": {"name": "Online-Status"},
+      "public_ip_v4": {"name": "Öffentliche IPv4"},
+      "public_ip_v6": {"name": "Öffentliche IPv6"},
+      "dsl_downstream": {"name": "DSL-Downstream-Geschwindigkeit"},
+      "dsl_upstream": {"name": "DSL-Upstream-Geschwindigkeit"},
+      "inet_download": {"name": "Internet-Download"},
+      "inet_upload": {"name": "Internet-Upload"},
+      "wlan_ssid": {"name": "WLAN-SSID (2,4 GHz)"},
+      "wlan_5ghz_ssid": {"name": "WLAN-SSID (5 GHz)"},
+      "wlan_guest_ssid": {"name": "Gast-WLAN-SSID"},
+      "firmware_version": {"name": "Firmware-Version"},
+      "dns_v4": {"name": "DNS-Server (IPv4)"},
+      "connected_devices_count": {"name": "Verbundene Geräte"},
+      "dsl_link_status": {"name": "DSL-Link-Status"},
+      "inet_uptime": {"name": "Internet-Laufzeit"},
+      "dsl_pop": {"name": "DSL-Gegenstelle (PoP)"},
+      "ex5g_signal_5g": {"name": "5G-Signalstärke"},
+      "ex5g_freq_5g": {"name": "5G-Frequenz"},
+      "ex5g_signal_lte": {"name": "LTE-Signalstärke"},
+      "ex5g_freq_lte": {"name": "LTE-Frequenz"}
+    },
+    "binary_sensor": {
+      "online": {"name": "Internetverbindung"},
+      "dsl_link": {"name": "DSL-Link"},
+      "use_wlan": {"name": "WLAN aktiv"},
+      "wlan_guest_active": {"name": "Gast-WLAN aktiv"},
+      "dualstack": {"name": "Dual-Stack (IPv4+IPv6)"},
+      "dsl_tunnel": {"name": "DSL-Tunnel"},
+      "lte_tunnel": {"name": "LTE-Tunnel"},
+      "hybrid_tunnel": {"name": "Hybrid-Tunnel"}
+    },
+    "switch": {
+      "wifi": {"name": "WLAN"},
+      "wifi_guest": {"name": "Gast-WLAN"},
+      "wifi_office": {"name": "Büro-WLAN"}
+    },
+    "button": {
+      "reboot": {"name": "Router neu starten"},
+      "reconnect": {"name": "Internet neu verbinden"},
+      "wps_on": {"name": "WPS aktivieren"}
+    }
+  }
+}
