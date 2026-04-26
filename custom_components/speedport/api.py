@@ -303,13 +303,11 @@ class SpeedportClient:
                 raw = await resp.read()
                 text = raw.decode("latin-1", errors="replace")
                 for pattern in [
-                    r"var\s+_httoken\s*=\s*(\d+)",
-                    r"httoken\s*=\s*(\d+)",
-                    r'"httoken"\s*:\s*"?(\d+)',
+                    r"var _httoken = \"?(\d+)\"?;",
                 ]:
                     if match := re.search(pattern, text):
-                        token = match.group(1)
-                        return token
+                        _LOGGER.debug("Found httoken: %s", match.group(1))
+                        return match.group(1)
         except Exception as exc:
             _LOGGER.debug("Could not get httoken from %s: %s", page_url, exc)
         return ""
@@ -470,53 +468,40 @@ class SpeedportClient:
             "Content-Type": "application/x-www-form-urlencoded"
         })
 
-        # Arcadyan models sometimes require specific form body format
-        body = f"password={password_hash}&showpw=0&_tn={token}"
-
-        async with self._session.post(
-            f"{self._base_url}/data/Login.json", 
-            data=body, 
-            headers=headers,
-            **{k:v for k,v in kwargs.items() if k != "headers"}
-        ) as resp:
-            text = await resp.text(errors="replace")
-            result = _parse_response(text)
-            
-        login_status = result.get("login", result.get("status", ""))
+        # We try multiple combinations for legacy models:
+        methods = [
+            f"password={password_hash}&showpw=0&_tn={token}",
+            f"password={password_hash}&showpw=0&httoken={token}",
+            f"password={self._password}&showpw=0&httoken={token}",
+        ]
         
-        # Check if login is valid
-        if login_status not in ("success", "ok", "true", "1"):
-            _LOGGER.debug("Login failed with primary method, trying alternative param...")
-            # Try with httoken instead of _tn
-            body_alt = f"password={password_hash}&showpw=0&httoken={token}"
-            async with self._session.post(
-                f"{self._base_url}/data/Login.json",
-                data=body_alt,
-                headers=headers,
-                **{k:v for k,v in kwargs.items() if k != "headers"}
-            ) as resp:
-                text = await resp.text(errors="replace")
-                result = _parse_response(text)
-                login_status = result.get("login", result.get("status", ""))
+        for body in methods:
+            try:
+                async with self._session.post(
+                    f"{self._base_url}/data/Login.json",
+                    data=body,
+                    headers=headers,
+                    **{k:v for k,v in kwargs.items() if k != "headers"}
+                ) as resp:
+                    text = await resp.text(errors="replace")
+                    result = _parse_response(text)
+                    login_status = str(result.get("login", result.get("status", ""))).lower()
+                    if login_status in ("success", "ok", "true", "1"):
+                        # Navigate to overview to "activate" the session
+                        nav_headers = dict(kwargs.get("headers", {}))
+                        nav_headers["Referer"] = login_page
+                        await self._session.get(
+                            f"{self._base_url}/html/content/overview/index.html?lang=de",
+                            headers=nav_headers,
+                            **{k:v for k,v in kwargs.items() if k != "headers"}
+                        )
+                        self._logged_in = True
+                        _LOGGER.info("Successfully logged in (Legacy mode) to %s", self._host)
+                        return
+            except Exception as exc:
+                _LOGGER.debug("Login method failed: %s", exc)
 
-        if login_status not in ("success", "ok", "true", "1"):
-            raise SpeedportAuthError(f"Login failed: {result}")
-
-        # IMPORTANT: Navigate to overview to "activate" the session for data fetching
-        try:
-            nav_headers = dict(kwargs.get("headers", {}))
-            nav_headers["Referer"] = login_page
-            async with self._session.get(
-                f"{self._base_url}/html/content/overview/index.html?lang=de",
-                headers=nav_headers,
-                **{k:v for k,v in kwargs.items() if k != "headers"}
-            ) as resp:
-                await resp.read()
-        except Exception:
-            pass
-
-        self._logged_in = True
-        _LOGGER.info("Successfully logged in (MD5 mode) to %s", self._host)
+        raise SpeedportAuthError("All login methods failed")
 
     async def _ensure_auth(self) -> None:
         """Ensure we are logged in."""
@@ -543,6 +528,14 @@ class SpeedportClient:
             raw.update(overview)
 
             # LAN (Critical for W 724V Typ B devices)
+            # WLAN info (Legacy models)
+            wlan_basic = await self._get_json("data/WLANBasic.json", referer="html/content/network/wlan_basic.html")
+            raw.update(wlan_basic)
+            
+            wlan_settings = await self._get_json("data/WLANSettings.json", referer="html/content/network/wlan_settings.html")
+            raw.update(wlan_settings)
+
+            # Connected devices (Legacy models often use LAN.json)
             lan = await self._get_json("data/LAN.json", referer="html/content/network/lan.html")
             raw.update(lan)
 
