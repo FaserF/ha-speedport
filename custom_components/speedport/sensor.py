@@ -280,7 +280,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):  # type: ignore[misc]
         ):
             try:
                 return int(val)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return None
 
         # Handle timestamp sensors
@@ -291,7 +291,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):  # type: ignore[misc]
                     second=0
                 )
                 return pytz.timezone("Europe/Berlin").localize(date)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return None
 
         return val
