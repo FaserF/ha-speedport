@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-import pytz  # type: ignore[import-untyped]
+import pytz
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -26,7 +26,7 @@ from .entity import SpeedportEntity
 
 
 @dataclass(frozen=True, kw_only=True)
-class SpeedportSensorEntityDescription(SensorEntityDescription):  # type: ignore[misc]
+class SpeedportSensorEntityDescription(SensorEntityDescription):
     """Description for Speedport sensors."""
 
     data_key: str = ""

@@ -23,14 +23,16 @@ class SpeedportEntity:
     def device_info(self) -> DeviceInfo:
         """Return device information."""
         data = self.coordinator.data
-        host = self.coordinator.config_entry.data.get("host", "speedport.ip")
+        config_entry = self.coordinator.config_entry
+        assert config_entry is not None
+        host = config_entry.data.get("host", "speedport.ip")
 
-        connections = None
+        connections: set[tuple[str, str]] = set()
         if data and data.mac:
             connections = {(dr.CONNECTION_NETWORK_MAC, data.mac)}
 
         return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.config_entry.entry_id)},
+            identifiers={(DOMAIN, config_entry.entry_id)},
             connections=connections,
             name=data.device_name if data and data.device_name else "Speedport",
             manufacturer="Deutsche Telekom",
