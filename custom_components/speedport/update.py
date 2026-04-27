@@ -53,14 +53,14 @@ class SpeedportUpdateEntity(SpeedportEntity, UpdateEntity):
         """Return the installed version."""
         if self.coordinator.data is None:
             return None
-        return self.coordinator.data.firmware_version
+        return self.coordinator.data.firmware_version or None
 
     @property
     def latest_version(self) -> str | None:
         """Return the latest version."""
         if self.coordinator.data is None:
             return None
-        return self.coordinator.data.latest_version
+        return self.coordinator.data.latest_version or self.installed_version
 
     @property
     def in_progress(self) -> bool:

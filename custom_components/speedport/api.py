@@ -772,11 +772,24 @@ class SpeedportClient:
                 unique_devices.append(d)
 
         # Extract firmware for legacy models (W 724V)
-        firmware = raw.get("firmware_version", "")
+        firmware = str(raw.get("firmware_version", "")).strip()
         if not firmware and "domain_name" in raw:
             parts = str(raw["domain_name"]).split("_")
             if len(parts) >= 3:
                 firmware = ".".join(parts[-3:])
+
+        # Final fallback: look for anything that looks like a firmware version in raw keys
+        if not firmware:
+            for key, value in raw.items():
+                if "firmware" in key.lower() and value and isinstance(value, str):
+                    firmware = value
+                    break
+
+        _LOGGER.debug(
+            "Extracted firmware version: %s (raw keys found: %s)",
+            firmware,
+            list(raw.keys()),
+        )
 
         return SpeedportData(
             device_name=raw.get("device_name", raw.get("model_name", "Speedport")),

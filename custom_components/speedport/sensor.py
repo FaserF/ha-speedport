@@ -247,9 +247,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
-        return (
-            self.coordinator.data is not None and self.coordinator.last_update_success
-        )
+        return self.coordinator.data is not None
 
     @property
     def native_value(self) -> StateType | datetime:
