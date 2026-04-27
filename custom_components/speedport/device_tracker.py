@@ -65,15 +65,10 @@ class SpeedportDeviceTracker(ScannerEntity, SpeedportEntity):
         assert config_entry is not None
         self._attr_unique_id = f"{config_entry.entry_id}_tracker_{self._mac}"
 
-    @property
-    def device_info(self) -> DeviceInfo | None:
-        """Return device information for the tracked client."""
-        config_entry = self.coordinator.config_entry
-        assert config_entry is not None
         device = self._get_device()
         name = device.hostname if device and device.hostname else self._mac
 
-        return DeviceInfo(
+        cast(Any, self)._attr_device_info = DeviceInfo(
             connections={(dr.CONNECTION_NETWORK_MAC, self._mac)},
             identifiers={(DOMAIN, self._mac)},
             name=name,
