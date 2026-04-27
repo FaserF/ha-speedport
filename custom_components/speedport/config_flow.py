@@ -1,4 +1,5 @@
 """Config flow for the Telekom Speedport integration."""
+
 from __future__ import annotations
 
 import logging
@@ -31,9 +32,9 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 
 OPTIONS_SCHEMA = vol.Schema(
     {
-        vol.Optional(
-            CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL
-        ): vol.All(vol.Coerce(int), vol.Range(min=10, max=3600)),
+        vol.Optional(CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL): vol.All(
+            vol.Coerce(int), vol.Range(min=10, max=3600)
+        ),
     }
 )
 
@@ -56,7 +57,8 @@ class SpeedportConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 use_https = url.scheme == "https"
                 host = url.host or host
                 if url.port and (
-                    (use_https and url.port != 443) or (not use_https and url.port != 80)
+                    (use_https and url.port != 443)
+                    or (not use_https and url.port != 80)
                 ):
                     host = f"{host}:{url.port}"
             else:

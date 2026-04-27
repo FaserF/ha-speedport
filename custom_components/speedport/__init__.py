@@ -1,4 +1,5 @@
 """The Telekom Speedport integration."""
+
 from __future__ import annotations
 
 import logging
@@ -8,7 +9,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import aiohttp_client, config_validation as cv
+from homeassistant.helpers import aiohttp_client
+from homeassistant.helpers import config_validation as cv
 
 from .api import SpeedportAuthError, SpeedportClient, SpeedportConnectionError
 from .const import (
@@ -50,7 +52,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except SpeedportAuthError as err:
         raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
     except (SpeedportConnectionError, Exception) as err:
-        raise ConfigEntryNotReady(f"Cannot connect to Speedport at {host}: {err}") from err
+        raise ConfigEntryNotReady(
+            f"Cannot connect to Speedport at {host}: {err}"
+        ) from err
 
     coordinator = SpeedportDataCoordinator(hass, entry, client)
     await coordinator.async_config_entry_first_refresh()

@@ -1,4 +1,5 @@
 """Constants for the Telekom Speedport integration."""
+
 from __future__ import annotations
 
 from typing import Final
@@ -24,6 +25,7 @@ PLATFORMS: list[Platform] = [
     Platform.DEVICE_TRACKER,
     Platform.SENSOR,
     Platform.SWITCH,
+    Platform.UPDATE,
 ]
 
 # Data keys

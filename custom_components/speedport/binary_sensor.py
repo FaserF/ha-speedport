@@ -1,4 +1,5 @@
 """Binary sensor platform for Telekom Speedport integration."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -38,7 +39,7 @@ BINARY_SENSORS: tuple[SpeedportBinarySensorDescription, ...] = (
         key="dsl_link",
         translation_key="dsl_link",
         name="DSL Link",
-        device_class=BinarySensorDeviceClass.PLUG,
+        device_class=BinarySensorDeviceClass.CONNECTIVITY,
         data_key="dsl_link_status",
         true_value="online",
     ),
@@ -48,14 +49,6 @@ BINARY_SENSORS: tuple[SpeedportBinarySensorDescription, ...] = (
         name="WiFi Active",
         device_class=BinarySensorDeviceClass.POWER,
         data_key="use_wlan",
-        true_value="1",
-    ),
-    SpeedportBinarySensorDescription(
-        key="wlan_guest_active",
-        translation_key="wlan_guest_active",
-        name="Guest WiFi Active",
-        device_class=BinarySensorDeviceClass.POWER,
-        data_key="wlan_guest_active",
         true_value="1",
     ),
     SpeedportBinarySensorDescription(
@@ -104,10 +97,11 @@ async def async_setup_entry(
 
     entities = []
     for description in BINARY_SENSORS:
-        # Filter out LTE/Hybrid sensors if not supported
-        if description.key in ("dsl_tunnel", "lte_tunnel", "hybrid_tunnel"):
-            if not coordinator.data or not coordinator.data.use_lte:
-                continue
+        # Filter out LTE/Hybrid sensors if the router definitely doesn't support them
+        if description.key in ("dsl_tunnel", "lte_tunnel", "hybrid_tunnel") and (
+            coordinator.data and coordinator.data.use_lte is False
+        ):
+            continue
         entities.append(SpeedportBinarySensor(coordinator, description))
 
     async_add_entities(entities)
@@ -116,6 +110,7 @@ async def async_setup_entry(
 class SpeedportBinarySensor(SpeedportEntity, BinarySensorEntity):
     """Speedport binary sensor entity."""
 
+    _attr_should_poll = False
     entity_description: SpeedportBinarySensorDescription
 
     def __init__(
@@ -128,6 +123,29 @@ class SpeedportBinarySensor(SpeedportEntity, BinarySensorEntity):
         assert coordinator.config_entry is not None
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{description.key}"
+
+        # Disable rarely used binary sensors by default
+        if description.key in (
+            "dualstack",
+            "dsl_tunnel",
+            "lte_tunnel",
+            "hybrid_tunnel",
+        ):
+            self._attr_entity_registry_enabled_default = False
+
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to hass."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self.async_write_ha_state)
+        )
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return (
+            self.coordinator.data is not None and self.coordinator.last_update_success
+        )
 
     @property
     def is_on(self) -> bool | None:
@@ -147,13 +165,8 @@ class SpeedportBinarySensor(SpeedportEntity, BinarySensorEntity):
         if val is None:
             return None
 
-        if true_value is None:
-            # Treat as boolean directly
+        if true_value is None or isinstance(val, bool):
+            # Treat as boolean directly if it is one or no true_value provided
             return bool(val)
 
         return str(val).lower() == str(true_value).lower()
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return super().available and self.coordinator.data is not None

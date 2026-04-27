@@ -1,4 +1,5 @@
 """Data update coordinator for the Speedport integration."""
+
 from __future__ import annotations
 
 import logging
@@ -10,7 +11,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import SpeedportAuthError, SpeedportClient, SpeedportConnectionError, SpeedportData
+from .api import (
+    SpeedportAuthError,
+    SpeedportClient,
+    SpeedportConnectionError,
+    SpeedportData,
+)
 from .const import CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -55,6 +61,20 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
                 raise UpdateFailed(f"Authentication error: {retry_err}") from retry_err
         except (SpeedportConnectionError, Exception) as err:
             raise UpdateFailed(f"Error fetching Speedport data: {err}") from err
+
+        # Fetch update info
+        try:
+            update_info = await self.client.get_update_info()
+            if update_info:
+                data.update_info = update_info
+                # Logic for W 724V: 'update_status' might be 'new_version' or similar
+                # For now, we look for anything that looks like a version or success
+                data.update_available = (
+                    str(update_info.get("status", "")).lower() == "new_version"
+                )
+                data.latest_version = update_info.get("new_version")
+        except Exception as err:
+            _LOGGER.debug("Failed to fetch update info: %s", err)
 
         # Update device registry
         await self._async_update_device_registry(data)

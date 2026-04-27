@@ -1,4 +1,5 @@
 """Button platform for Telekom Speedport integration."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -52,7 +53,9 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Speedport buttons."""
-    coordinator: SpeedportDataCoordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator: SpeedportDataCoordinator = hass.data[DOMAIN][entry.entry_id][
+        DATA_COORDINATOR
+    ]
     client: SpeedportClient = hass.data[DOMAIN][entry.entry_id][DATA_CLIENT]
     async_add_entities(
         SpeedportButton(coordinator, client, description) for description in BUTTONS

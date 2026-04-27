@@ -1,4 +1,5 @@
 """Diagnostics support for Telekom Speedport."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -34,7 +35,9 @@ async def async_get_config_entry_diagnostics(
 
     diagnostics_data = {
         "entry": async_redact_data(entry.as_dict(), TO_REDACT),
-        "data": async_redact_data(coordinator.data.raw if coordinator.data else {}, TO_REDACT),
+        "data": async_redact_data(
+            coordinator.data.raw if coordinator.data else {}, TO_REDACT
+        ),
         "devices": [
             async_redact_data(device.__dict__, TO_REDACT)
             for device in (coordinator.data.devices if coordinator.data else [])

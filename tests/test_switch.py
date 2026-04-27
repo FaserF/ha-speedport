@@ -1,5 +1,5 @@
 """Tests for the Speedport switch platform."""
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 import pytest
 from homeassistant.core import HomeAssistant
 
@@ -9,14 +9,17 @@ from custom_components.speedport.switch import async_setup_entry
 @pytest.mark.asyncio
 async def test_switch_setup(hass: HomeAssistant):
     """Test switch setup."""
-    entry = MagicMock()
-    entry.entry_id = "test_entry"
+    entry = MagicMock(entry_id="test_entry")
     
     coordinator = MagicMock()
+    coordinator.config_entry = entry
+    coordinator.async_request_refresh = AsyncMock()
     coordinator.data = MagicMock()
     coordinator.data.use_wlan = True
+    coordinator.data.wlan_guest_active = True
+    coordinator.data.wlan_office_active = True
     
-    client = MagicMock()
+    client = AsyncMock()
     
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         DATA_COORDINATOR: coordinator,

@@ -6,7 +6,8 @@
         "description": "Configure your Telekom Speedport router",
         "data": {
           "host": "Host or IP address",
-          "password": "Router password"
+          "password": "Router password",
+          "use_https": "Use HTTPS"
         }
       }
     },
@@ -41,8 +42,6 @@
       "inet_upload": {"name": "Internet Upload"},
       "wlan_ssid": {"name": "WLAN SSID (2.4 GHz)"},
       "wlan_5ghz_ssid": {"name": "WLAN SSID (5 GHz)"},
-      "wlan_guest_ssid": {"name": "Guest WLAN SSID"},
-      "firmware_version": {"name": "Firmware Version"},
       "dns_v4": {"name": "DNS Server (IPv4)"},
       "connected_devices_count": {"name": "Connected Devices"},
       "dsl_link_status": {"name": "DSL Link Status"},
@@ -57,7 +56,6 @@
       "online": {"name": "Internet Connection"},
       "dsl_link": {"name": "DSL Link"},
       "use_wlan": {"name": "WiFi Active"},
-      "wlan_guest_active": {"name": "Guest WiFi Active"},
       "dualstack": {"name": "Dual Stack (IPv4+IPv6)"},
       "dsl_tunnel": {"name": "DSL Tunnel"},
       "lte_tunnel": {"name": "LTE Tunnel"},
@@ -72,6 +70,9 @@
       "reboot": {"name": "Reboot Router"},
       "reconnect": {"name": "Reconnect Internet"},
       "wps_on": {"name": "Enable WPS"}
+    },
+    "update": {
+      "firmware": {"name": "Firmware Update"}
     }
   }
 }

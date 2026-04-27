@@ -4,6 +4,7 @@ Supports multiple generations of Speedport routers:
 - Older models (e.g. W 724V): Plain JSON, MD5 login, httoken CSRF.
 - Newer models (e.g. Smart 3/4, Pro): AES-CCM encrypted JSON, SHA256 challenge-response login.
 """
+
 from __future__ import annotations
 
 import json
@@ -26,8 +27,9 @@ HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
 
 def _simplify_response(data: list[dict[str, Any]]) -> dict[str, Any]:
     """Convert the Speedport API's list-of-dicts format into a flat dict.
-    
-    This is the robust version for W 724V Typ B and others.
+
+    This version is robust for legacy models (W 724V) where properties are often
+    nested in lists of varid/varvalue pairs.
     """
     result: dict[str, Any] = {}
     for item in data:
@@ -35,37 +37,33 @@ def _simplify_response(data: list[dict[str, Any]]) -> dict[str, Any]:
             continue
         varid = item.get("varid", "")
         varvalue = item.get("varvalue", "")
+
         if isinstance(varvalue, list):
-            # Convert sub-items to list of plain dicts
-            sub_items = []
-            for sub in varvalue:
-                if isinstance(sub, dict):
-                    sub_dict: dict[str, Any] = {}
-                    for k, v in sub.items():
-                        if k == "varid":
-                            sub_dict["_varid"] = v
-                        elif k == "varvalue":
-                            if isinstance(v, list):
-                                # nested sub-sub-items
-                                inner: dict[str, Any] = {}
-                                for ss in v:
-                                    if isinstance(ss, dict):
-                                        inner[ss.get("varid", "")] = ss.get("varvalue", "")
-                                sub_dict.update(inner)
-                            else:
-                                sub_dict["_value"] = v
-                        else:
-                            sub_dict[k] = v
-                    # Try to flatten varvalue sub-items
-                    if isinstance(sub.get("varvalue"), list):
-                        flat_sub: dict[str, Any] = {}
-                        for ss in sub.get("varvalue", []):
-                            if isinstance(ss, dict):
-                                flat_sub[ss.get("varid", "")] = ss.get("varvalue", "")
-                        sub_items.append(flat_sub)
+            # Check if this list is a collection of property dicts (varid/varvalue pairs)
+            if varvalue and all(isinstance(v, dict) and "varid" in v for v in varvalue):
+                flat_item = {}
+                for v in varvalue:
+                    v_id = v.get("varid", "")
+                    v_val = v.get("varvalue", "")
+                    if isinstance(v_val, list):
+                        # Nested properties? Flatten them too
+                        v_val = _simplify_response(v_val)
+                    flat_item[v_id] = v_val
+
+                # If we already have a list for this varid, append. Otherwise create list.
+                if varid in result and isinstance(result[varid], list):
+                    result[varid].append(flat_item)
+                else:
+                    result[varid] = [flat_item]
+            else:
+                # Fallback: process list normally
+                sub_items = []
+                for sub in varvalue:
+                    if isinstance(sub, dict) and "varid" in sub:
+                        sub_items.append(_simplify_response([sub]))
                     else:
                         sub_items.append(sub)
-            result.setdefault(varid, []).extend(sub_items)
+                result[varid] = sub_items
         else:
             result[varid] = varvalue
     return result
@@ -76,7 +74,9 @@ def _decode(data: str, key: str = DEFAULT_KEY) -> dict[str, Any] | str:
     try:
         ciphertext_tag = bytes.fromhex(data)
         cipher = AES.new(bytes.fromhex(key), AES.MODE_CCM, bytes.fromhex(key)[:8])
-        decrypted = cipher.decrypt_and_verify(ciphertext_tag[:-16], ciphertext_tag[-16:])
+        decrypted = cipher.decrypt_and_verify(
+            ciphertext_tag[:-16], ciphertext_tag[-16:]
+        )
         text = decrypted.decode("utf-8")
         try:
             parsed = json.loads(text)
@@ -138,20 +138,24 @@ class WlanDevice:
     ipv6: str = ""
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "WlanDevice":
+    def from_dict(cls, data: dict[str, Any]) -> WlanDevice:
         """Create a WlanDevice from raw device API data."""
         return cls(
             mac=data.get("mdevice_mac", data.get("device_mac", data.get("mac", ""))),
             hostname=data.get(
                 "mdevice_name",
-                data.get("mdevice_hostname", data.get("device_name", data.get("name", ""))),
+                data.get(
+                    "mdevice_hostname", data.get("device_name", data.get("name", ""))
+                ),
             ),
             ip=data.get("mdevice_ipv4", data.get("device_ipv4", data.get("ip", ""))),
             speed=data.get("mdevice_speed", data.get("device_speed", "")),
             downspeed=data.get("mdevice_downspeed", data.get("device_downspeed", "")),
             upspeed=data.get("mdevice_upspeed", data.get("device_upspeed", "")),
             type=data.get("mdevice_type", data.get("device_type", "")),
-            connected=str(data.get("mdevice_connected", data.get("device_connected", "1")))
+            connected=str(
+                data.get("mdevice_connected", data.get("device_connected", "1"))
+            )
             in ("1", "true", "on"),
             rssi=data.get("mdevice_rssi", data.get("device_rssi", "")),
             fix_dhcp=data.get("mdevice_fix_dhcp", data.get("device_fix_dhcp", "")),
@@ -167,25 +171,26 @@ class SpeedportData:
     device_name: str = "Speedport"
     firmware_version: str = ""
     serial_number: str = ""
+    mac: str = ""
 
     # Connection status
     online_status: str = ""
     router_state: str = ""
     dsl_link_status: str = ""
-    dsl_downstream: int = 0
-    dsl_upstream: int = 0
-    inet_download: int = 0
-    inet_upload: int = 0
+    dsl_downstream: int | None = None
+    dsl_upstream: int | None = None
+    inet_download: int | None = None
+    inet_upload: int | None = None
     inet_uptime: str = ""
     dsl_pop: str = ""
 
     # WiFi
-    use_wlan: bool = False
+    use_wlan: bool | None = None
     wlan_ssid: str = ""
     wlan_5ghz_ssid: str = ""
-    wlan_guest_active: bool = False
+    wlan_guest_active: bool | None = None
     wlan_guest_ssid: str = ""
-    wlan_office_active: bool = False
+    wlan_office_active: bool | None = None
     wlan_office_ssid: str = ""
 
     # IP data
@@ -196,11 +201,11 @@ class SpeedportData:
     gateway_ip_v4: str = ""
 
     # Features
-    dualstack: bool = False
-    use_lte: bool = False
-    dsl_tunnel: bool = False
-    lte_tunnel: bool = False
-    hybrid_tunnel: bool = False
+    dualstack: bool | None = None
+    use_lte: bool | None = None
+    dsl_tunnel: bool | None = None
+    lte_tunnel: bool | None = None
+    hybrid_tunnel: bool | None = None
 
     # Signal (5G/LTE)
     ex5g_signal_5g: str = ""
@@ -210,6 +215,11 @@ class SpeedportData:
 
     # Connected devices
     devices: list[WlanDevice] = field(default_factory=list)
+
+    # Update information
+    update_available: bool = False
+    latest_version: str | None = None
+    update_info: dict[str, Any] = field(default_factory=dict)
 
     # Raw data
     raw: dict[str, Any] = field(default_factory=dict)
@@ -251,7 +261,9 @@ class SpeedportClient:
 
         self._password = password
         self._session = session
-        self._base_url = f"https://{self._host}" if use_https else f"http://{self._host}"
+        self._base_url = (
+            f"https://{self._host}" if use_https else f"http://{self._host}"
+        )
         self._logged_in = False
         self._login_key: str | None = None  # Challenge key for modern models
         self._encrypted_mode: bool | None = None  # Detected on first request
@@ -265,12 +277,12 @@ class SpeedportClient:
             kwargs = self._req_kwargs()
             headers = dict(kwargs.get("headers", {}))
             headers["X-Requested-With"] = "XMLHttpRequest"
-            
+
             await self._session.post(
                 f"{self._base_url}/data/Login.json",
                 data={"logout": "byby"},
                 headers=headers,
-                **{k:v for k,v in kwargs.items() if k != "headers"}
+                **{k: v for k, v in kwargs.items() if k != "headers"},
             )
         except Exception as exc:
             _LOGGER.debug("Logout failed: %s", exc)
@@ -292,7 +304,7 @@ class SpeedportClient:
                 "Accept": "application/json, text/javascript, */*; q=0.01",
                 "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
                 "Connection": "keep-alive",
-            }
+            },
         }
 
     async def _get_httoken(self, page_url: str) -> str:
@@ -312,55 +324,87 @@ class SpeedportClient:
             _LOGGER.debug("Could not get httoken from %s: %s", page_url, exc)
         return ""
 
-    async def _get_json(self, path: str, referer: str = "", auth: bool = False) -> dict[str, Any]:
+    async def _get_json(
+        self, path: str, referer: str = "", auth: bool = False
+    ) -> dict[str, Any]:
         """Perform a GET request and parse the JSON response."""
         # Add cache-busting params as expected by the router
-        import time
         import random
+        import time
+
         timestamp = int(time.time() * 1000)
         rand = random.randint(0, 1000)
-        
+
         url = f"{self._base_url}/{path}"
         if "?" in url:
             url += f"&_time={timestamp}&_rand={rand}"
         else:
             url += f"?_time={timestamp}&_rand={rand}"
 
+        # For legacy models like W 724V Typ B, we must pass _tn token in GET requests
+        if hasattr(self, "_token") and self._token:
+            url += f"&_tn={self._token}"
+
         kwargs = self._req_kwargs()
         headers = dict(kwargs.get("headers", {}))
         headers["X-Requested-With"] = "XMLHttpRequest"
-        
-        if referer:
-            ref_url = f"{self._base_url}/{referer}"
-            headers["Referer"] = ref_url
+
+        # For legacy models like W 724V, Referer MUST be the login page for data endpoints
+        if path.startswith("data/") or not referer:
+            referer = "html/login/index.html"
+
+        ref_url = f"{self._base_url}/{referer}"
+        headers["Referer"] = ref_url
 
         try:
-            async with self._session.get(url, headers=headers, **{k:v for k,v in kwargs.items() if k != "headers"}) as resp:
+            async with self._session.get(
+                url,
+                headers=headers,
+                **{k: v for k, v in kwargs.items() if k != "headers"},
+            ) as resp:
                 text = await resp.text(errors="replace")
-                
+
                 # Robust parsing: if it redirects to login, we are logged out
-                if "Document moved" in text or "login/index.html" in text or "login_index_html" in text:
+                if (
+                    "Document moved" in text
+                    or "login/index.html" in text
+                    or "login_index_html" in text
+                ):
                     _LOGGER.debug("Session expired or redirected to login for %s", path)
                     self._logged_in = False
                     return {}
 
-                _LOGGER.debug("Raw response from %s: %s", path, text[:200])
+                _LOGGER.debug(
+                    "Raw response from %s (first 300 chars): %s", path, text[:300]
+                )
 
                 if self._encrypted_mode is None:
                     # Detect mode on first request: if it's hex-only, it's encrypted
-                    if all(c in "0123456789abcdefABCDEF" for c in text.strip()) and len(text) > 32:
+                    if (
+                        all(c in "0123456789abcdefABCDEF" for c in text.strip())
+                        and len(text) > 32
+                    ):
                         self._encrypted_mode = True
                     else:
                         self._encrypted_mode = False
 
-                key = self._login_key if (auth and self._encrypted_mode) else DEFAULT_KEY
+                key = (
+                    self._login_key if (auth and self._encrypted_mode) else DEFAULT_KEY
+                )
                 data = _parse_response(text, key)
-                
+
+                _LOGGER.debug(
+                    "Parsed %d keys from %s: %s",
+                    len(data),
+                    path,
+                    list(data.keys())[:20],
+                )
+
                 # If data is empty for Overview, try fallback to Login.json
                 if not data and path == "data/Overview.json":
                     _LOGGER.debug("Overview.json empty, trying Login.json fallback")
                     return await self._get_json("data/Login.json", referer=referer)
-                
+
                 return data
         except aiohttp.ClientError as exc:
             raise SpeedportConnectionError(f"GET {url} failed: {exc}") from exc
@@ -373,7 +417,7 @@ class SpeedportClient:
         kwargs = self._req_kwargs()
         headers = dict(kwargs.get("headers", {}))
         headers["X-Requested-With"] = "XMLHttpRequest"
-        
+
         if referer:
             ref_url = f"{self._base_url}/{referer}"
             headers["Referer"] = ref_url
@@ -382,7 +426,9 @@ class SpeedportClient:
                 data = {**data, "httoken" if self._encrypted_mode else "_tn": token}
 
         body_str = "&".join(f"{k}={v}" for k, v in data.items())
-        key = (self._login_key if (auth and self._encrypted_mode) else None) or DEFAULT_KEY
+        key = (
+            self._login_key if (auth and self._encrypted_mode) else None
+        ) or DEFAULT_KEY
 
         if self._encrypted_mode:
             body = _encode(body_str, key)
@@ -393,7 +439,10 @@ class SpeedportClient:
 
         try:
             async with self._session.post(
-                url, data=body, headers=headers, **{k:v for k,v in kwargs.items() if k != "headers"}
+                url,
+                data=body,
+                headers=headers,
+                **{k: v for k, v in kwargs.items() if k != "headers"},
             ) as resp:
                 text = await resp.text(errors="replace")
                 return _parse_response(text, key)
@@ -436,56 +485,59 @@ class SpeedportClient:
                 self._encrypted_mode = True
                 self._login_key = challenge
                 # Compute SHA256 hash: challenge:password
-                auth_str = f"{challenge}:{self._password}".encode("utf-8")
+                auth_str = f"{challenge}:{self._password}".encode()
                 password_hash = sha256(auth_str).hexdigest()
                 data = {"showpw": "0", "password": password_hash}
-                result = await self._post_json("data/Login.json", data, referer="", auth=False)
+                result = await self._post_json(
+                    "data/Login.json", data, referer="", auth=False
+                )
                 if result.get("login") == "success":
                     self._logged_in = True
-                    _LOGGER.info("Successfully logged in (SHA256 mode) to %s", self._host)
+                    _LOGGER.info(
+                        "Successfully logged in (SHA256 mode) to %s", self._host
+                    )
                     return
         except Exception as exc:
-            _LOGGER.debug("Modern login attempt failed, falling back to legacy: %s", exc)
+            _LOGGER.debug(
+                "Modern login attempt failed, falling back to legacy: %s", exc
+            )
 
         # Fallback/Legacy: W 724V style (MD5)
         self._encrypted_mode = False
         login_page = f"{self._base_url}/html/login/index.html"
         token = await self._get_httoken(login_page)
+        self._token = token
         password_hash = md5(self._password.encode("utf-8")).hexdigest()
-        
+
         # Build form body manually to ensure compatibility
-        data = {
-            "password": password_hash,
-            "showpw": "0",
-            "_tn": token
-        }
-        
+        data = {"password": password_hash, "showpw": "0", "_tn": token}
+
         kwargs = self._req_kwargs()
         headers = dict(kwargs.get("headers", {}))
-        headers.update({
-            "Referer": login_page,
-            "X-Requested-With": "XMLHttpRequest",
-            "Content-Type": "application/x-www-form-urlencoded"
-        })
+        headers.update(
+            {"Referer": login_page, "Content-Type": "application/x-www-form-urlencoded"}
+        )
 
         # We try multiple combinations for legacy models:
         methods = [
-            f"password={password_hash}&showpw=0&_tn={token}",
-            f"password={password_hash}&showpw=0&httoken={token}",
-            f"password={self._password}&showpw=0&httoken={token}",
+            {"password": password_hash, "showpw": "0", "_tn": token},
+            {"password": password_hash, "showpw": "0", "httoken": token},
+            {"password": self._password, "showpw": "0", "httoken": token},
         ]
-        
+
         for body in methods:
             try:
                 async with self._session.post(
                     f"{self._base_url}/data/Login.json",
                     data=body,
                     headers=headers,
-                    **{k:v for k,v in kwargs.items() if k != "headers"}
+                    **{k: v for k, v in kwargs.items() if k != "headers"},
                 ) as resp:
                     text = await resp.text(errors="replace")
                     result = _parse_response(text)
-                    login_status = str(result.get("login", result.get("status", ""))).lower()
+                    login_status = str(
+                        result.get("login", result.get("status", ""))
+                    ).lower()
                     if login_status in ("success", "ok", "true", "1"):
                         # Navigate to overview to "activate" the session
                         nav_headers = dict(kwargs.get("headers", {}))
@@ -493,10 +545,12 @@ class SpeedportClient:
                         await self._session.get(
                             f"{self._base_url}/html/content/overview/index.html?lang=de",
                             headers=nav_headers,
-                            **{k:v for k,v in kwargs.items() if k != "headers"}
+                            **{k: v for k, v in kwargs.items() if k != "headers"},
                         )
                         self._logged_in = True
-                        _LOGGER.info("Successfully logged in (Legacy mode) to %s", self._host)
+                        _LOGGER.info(
+                            "Successfully logged in (Legacy mode) to %s", self._host
+                        )
                         return
             except Exception as exc:
                 _LOGGER.debug("Login method failed: %s", exc)
@@ -512,53 +566,130 @@ class SpeedportClient:
         """Fetch all available data from the router."""
         raw: dict[str, Any] = {}
 
-        # Public Status (or fallback heartbeat)
+        # Public Status — always available, even without auth on W 724V.
+        # This gives us domain_name (e.g. "Speedport_W_724V_...") for model detection.
         try:
             status = await self._get_json("data/Status.json")
             raw.update(status)
         except Exception:
             pass
 
+        # Detect legacy W 724V early using domain_name from Status.json
+        # (device_name may not yet be populated at this stage)
+        domain_name = str(raw.get("domain_name", ""))
+        is_legacy_w724v = any(
+            x in domain_name or x in str(raw.get("device_name", ""))
+            for x in ("W_724V", "W 724V")
+        )
+        _LOGGER.debug(
+            "Model detection: domain_name=%s, is_legacy_w724v=%s",
+            domain_name,
+            is_legacy_w724v,
+        )
+
         # Auth required for the rest
         try:
             await self._ensure_auth()
-            
-            # Overview (Primary for newer, Fallback for older)
-            overview = await self._get_json("data/Overview.json", referer="html/content/overview/index.html")
-            raw.update(overview)
 
-            # LAN (Critical for W 724V Typ B devices)
-            # WLAN info (Legacy models)
-            wlan_basic = await self._get_json("data/WLANBasic.json", referer="html/content/network/wlan_basic.html")
-            raw.update(wlan_basic)
-            
-            wlan_settings = await self._get_json("data/WLANSettings.json", referer="html/content/network/wlan_settings.html")
-            raw.update(wlan_settings)
+            if is_legacy_w724v:
+                # For W 724V: fetch Status.json again after auth (session cookie may unlock more fields)
+                _LOGGER.debug(
+                    "Legacy W 724V detected — fetching authenticated Status.json"
+                )
+                status_auth = await self._get_json(
+                    "data/Status.json", referer="html/login/index.html"
+                )
+                raw.update(status_auth)
 
-            # Connected devices (Legacy models often use LAN.json)
-            lan = await self._get_json("data/LAN.json", referer="html/content/network/lan.html")
-            raw.update(lan)
+                # W 724V fallback endpoints for WLAN and DSL details
+                for ep, ref in [
+                    ("data/WLAN.json", "html/content/network/wlan_basic.html"),
+                    ("data/WLANBasic.json", "html/content/network/wlan_basic.html"),
+                    (
+                        "data/WLANSettings.json",
+                        "html/content/network/wlan_settings.html",
+                    ),
+                    ("data/WLANGuest.json", "html/content/network/wlan_guest.html"),
+                    ("data/LAN.json", "html/content/network/lan.html"),
+                    ("data/IPData.json", "html/content/internet/con_ipdata.html"),
+                    ("data/Internet.json", "html/content/internet/con_ipdata.html"),
+                ]:
+                    try:
+                        res = await self._get_json(ep, referer=ref)
+                        if res:
+                            raw.update(res)
+                    except Exception:
+                        pass
 
-            # IP Data
-            ip_data = await self._get_json("data/IPData.json", referer="html/content/internet/con_ipdata.html", auth=True)
-            raw.update(ip_data)
+                # Overview last (may return partial data on W 724V — don't override good values)
+                try:
+                    overview = await self._get_json(
+                        "data/Overview.json",
+                        referer="html/content/overview/index.html",
+                    )
+                    for k, v in overview.items():
+                        if k not in raw or not raw[k]:
+                            raw[k] = v
+                except Exception as exc:
+                    _LOGGER.debug("Overview.json fetch failed (W 724V): %s", exc)
 
-            # WLAN
-            wlan = await self._get_json("data/WLANBasic.json", referer="html/content/network/wlan_basic.html")
-            raw.update(wlan)
-            
-            # Ensure Login.json (GET) data is always present as it is the most reliable heartbeat
-            heartbeat = await self._get_json("data/Login.json", referer="html/content/overview/index.html")
-            for k, v in heartbeat.items():
-                if k not in raw:
-                    raw[k] = v
+            else:
+                # Modern models: Overview first, then extended endpoints
+                overview = await self._get_json(
+                    "data/Overview.json",
+                    referer="html/content/overview/index.html",
+                )
+                raw.update(overview)
+
+                wlan_basic = await self._get_json(
+                    "data/WLANBasic.json",
+                    referer="html/content/network/wlan_basic.html",
+                )
+                raw.update(wlan_basic)
+
+                wlan_settings = await self._get_json(
+                    "data/WLANSettings.json",
+                    referer="html/content/network/wlan_settings.html",
+                )
+                raw.update(wlan_settings)
+
+                lan = await self._get_json(
+                    "data/LAN.json",
+                    referer="html/content/network/lan.html",
+                )
+                raw.update(lan)
+
+                ip_data = await self._get_json(
+                    "data/IPData.json",
+                    referer="html/content/internet/con_ipdata.html",
+                    auth=True,
+                )
+                raw.update(ip_data)
+
+            # Heartbeat: Login.json GET fills missing fields regardless of model
+            try:
+                heartbeat = await self._get_json(
+                    "data/Login.json",
+                    referer="html/content/overview/index.html",
+                )
+                for k, v in heartbeat.items():
+                    if k not in raw:
+                        raw[k] = v
+            except Exception as exc:
+                _LOGGER.debug("Login.json heartbeat failed: %s", exc)
 
         except Exception as exc:
             _LOGGER.debug("Error fetching authenticated data: %s", exc)
 
+        _LOGGER.debug("Merged raw keys: %s", list(raw.keys()))
+
         # Devices (Try multiple endpoints for broad compatibility)
         devices_raw: dict[str, Any] = {}
-        for path in ("data/DeviceList.json", "data/HomeNetwork.json", "data/Modules.json"):
+        for path in (
+            "data/DeviceList.json",
+            "data/HomeNetwork.json",
+            "data/Modules.json",
+        ):
             try:
                 d_raw = await self._get_json(path)
                 if d_raw:
@@ -568,21 +699,30 @@ class SpeedportClient:
 
         return self._build_data(raw, devices_raw)
 
-    def _build_data(self, raw: dict[str, Any], devices_raw: dict[str, Any]) -> SpeedportData:
+    def _build_data(
+        self, raw: dict[str, Any], devices_raw: dict[str, Any]
+    ) -> SpeedportData:
         """Build a SpeedportData object from raw API dictionaries."""
-        def _int(val: Any, default: int = 0) -> int:
+        all_data = {**devices_raw, **raw}
+
+        def _int(val: Any, default: int | None = None) -> int | None:
             try:
+                if val is None:
+                    return default
                 return int(val)
             except (ValueError, TypeError):
                 return default
 
-        def _bool(val: Any) -> bool:
+        def _bool(val: Any) -> bool | None:
+            if val is None:
+                return None
             return str(val).strip().lower() in ("1", "true", "on", "yes", "online")
 
         # Parse connected devices
         devices: list[WlanDevice] = []
         device_keys = (
             "addmwlandevice",
+            "addmwlandevice_5g",
             "addmwlan5device",
             "addmlandevice",
             "addmdevice",
@@ -591,33 +731,34 @@ class SpeedportClient:
             "device",
             "mdevice",
             "homenetwork",
+            "lan1_device",
+            "lan2_device",
+            "lan3_device",
+            "lan4_device",
         )
         for key in device_keys:
-            entries = devices_raw.get(key, [])
+            entries = all_data.get(key, [])
             if not isinstance(entries, list):
                 entries = [entries]
             for dev_entry in entries:
-                if isinstance(dev_entry, dict):
-                    # Device data can be nested in "varvalue" list (W 724V Typ B style)
-                    if "varvalue" in dev_entry and isinstance(dev_entry["varvalue"], list):
-                        inner = {}
-                        for sub in dev_entry.get("varvalue", []):
-                            if isinstance(sub, dict):
-                                inner[sub.get("varid", "")] = sub.get("varvalue", "")
-                        if inner:
-                            devices.append(WlanDevice.from_dict(inner))
-                    else:
-                        devices.append(WlanDevice.from_dict(dev_entry))
+                if isinstance(dev_entry, dict) and any(
+                    k in dev_entry
+                    for k in (
+                        "mdevice_mac",
+                        "device_mac",
+                        "mac",
+                        "mdevice_name",
+                        "device_name",
+                    )
+                ):
+                    devices.append(WlanDevice.from_dict(dev_entry))
 
         # Filter out duplicates by MAC
         seen_macs = set()
-        unique_devices = []
+        unique_devices: list[WlanDevice] = []
         for d in devices:
-            if not d.mac:
-                continue
-            mac = d.mac.lower()
-            if mac not in seen_macs:
-                seen_macs.add(mac)
+            if d.mac and d.mac.lower() not in seen_macs:
+                seen_macs.add(d.mac.lower())
                 unique_devices.append(d)
 
         # Extract firmware for legacy models (W 724V)
@@ -631,31 +772,73 @@ class SpeedportClient:
             device_name=raw.get("device_name", raw.get("model_name", "Speedport")),
             firmware_version=firmware,
             serial_number=raw.get("serial_number", ""),
+            mac=raw.get("mac", raw.get("lan_mac", raw.get("serial_number", ""))),
             online_status=raw.get("onlinestatus", raw.get("online_status", "")),
             router_state=raw.get("router_state", ""),
-            dsl_link_status=raw.get("dsl_link_status", ""),
-            dsl_downstream=_int(raw.get("dsl_downstream")),
-            dsl_upstream=_int(raw.get("dsl_upstream")),
-            inet_download=_int(raw.get("inet_download")),
-            inet_upload=_int(raw.get("inet_upload")),
-            inet_uptime=raw.get("inet_uptime", ""),
-            dsl_pop=raw.get("dsl_pop", ""),
-            use_wlan=_bool(raw.get("use_wlan", raw.get("wlan_active", "0"))),
-            wlan_ssid=raw.get("wlan_ssid", raw.get("ssid", raw.get("wlan_ssid_24g", ""))),
+            # W 724V uses "dsl_link" or "dsl_link_status"
+            dsl_link_status=raw.get(
+                "dsl_link_status", raw.get("dsl_link", raw.get("status", ""))
+            ),
+            # W 724V uses "dsl_ds_synchro" (in kbps) for downstream
+            dsl_downstream=_int(
+                raw.get("dsl_downstream", raw.get("dsl_ds_synchro", 0))
+            ),
+            dsl_upstream=_int(raw.get("dsl_upstream", raw.get("dsl_us_synchro", 0))),
+            # W 724V: "inet_download" / "inet_upload" (default to 0 if missing)
+            inet_download=_int(raw.get("inet_download", 0)),
+            inet_upload=_int(raw.get("inet_upload", 0)),
+            # W 724V uptime (default to empty string if missing)
+            inet_uptime=raw.get("inet_uptime", raw.get("onlinetime", "")),
+            dsl_pop=raw.get("dsl_pop", raw.get("dsl_pop_name", "Unknown")),
+            use_wlan=_bool(
+                raw.get("use_wlan", raw.get("wlan_active", raw.get("wlan_state")))
+            ),
+            wlan_ssid=raw.get(
+                "wlan_ssid",
+                raw.get(
+                    "ssid_24g", raw.get("ssid", raw.get("wlan_ssid_24g", "Unknown"))
+                ),
+            ),
             wlan_5ghz_ssid=raw.get(
-                "wlan_5ghz_ssid", raw.get("wlan_ssid_5g", raw.get("ssid2", ""))
+                "wlan_5ghz_ssid",
+                raw.get("ssid_5g", raw.get("wlan_ssid_5g", raw.get("ssid2", ""))),
             ),
             wlan_guest_active=_bool(
-                raw.get("wlan_guest_active", raw.get("use_guest_wlan", "0"))
+                raw.get(
+                    "wlan_guest_active",
+                    raw.get("use_guest_wlan", raw.get("hsfon_status")),
+                )
             ),
-            wlan_guest_ssid=raw.get("wlan_guest_ssid", raw.get("guest_ssid", "")),
-            wlan_office_active=_bool(raw.get("wlan_office_active")),
+            wlan_guest_ssid=raw.get(
+                "wlan_guest_ssid",
+                raw.get(
+                    "ssid_guest",
+                    raw.get(
+                        "guest_ssid",
+                        "Telekom_FON" if raw.get("hsfon_status") == "1" else "Unknown",
+                    ),
+                ),
+            ),
+            wlan_office_active=_bool(
+                raw.get(
+                    "wlan_office_active",
+                    raw.get("use_office_wlan", raw.get("wlan_office_state")),
+                )
+            ),
             wlan_office_ssid=raw.get("wlan_office_ssid", ""),
-            public_ip_v4=raw.get("public_ip_v4", raw.get("ip_v4", "")),
-            public_ip_v6=raw.get("public_ip_v6", raw.get("ip_v6", "")),
-            dns_v4=raw.get("dns_v4", raw.get("dns_server1", "")),
-            dns_v6=raw.get("dns_v6", ""),
-            gateway_ip_v4=raw.get("gateway_ip_v4", ""),
+            public_ip_v4=raw.get(
+                "public_ip_v4",
+                raw.get("ip_extern", raw.get("srv_ipv4_wan", raw.get("other_ip", ""))),
+            ),
+            public_ip_v6=raw.get(
+                "public_ip_v6", raw.get("ip_v6_extern", raw.get("ip_v6", ""))
+            ),
+            dns_v4=raw.get(
+                "dns_v4",
+                raw.get("dns_v4_1", raw.get("dns_server1", raw.get("other_dns", ""))),
+            ),
+            dns_v6=raw.get("dns_v6", raw.get("dns_v6_1", "")),
+            gateway_ip_v4=raw.get("gateway_ip_v4", raw.get("ip_gateway", "")),
             dualstack=_bool(raw.get("dualstack")),
             use_lte=_bool(raw.get("use_lte")),
             dsl_tunnel=_bool(raw.get("dsl_tunnel")),
@@ -665,7 +848,7 @@ class SpeedportClient:
             ex5g_freq_5g=raw.get("ex5g_freq_5g", ""),
             ex5g_signal_lte=raw.get("ex5g_signal_lte", ""),
             ex5g_freq_lte=raw.get("ex5g_freq_lte", ""),
-            devices=devices,
+            devices=unique_devices,
             raw=raw,
         )
 
@@ -673,17 +856,55 @@ class SpeedportClient:
     async def reconnect(self) -> bool:
         """Reconnect the internet connection."""
         await self._ensure_auth()
-        result = await self._post_json("data/Connect.json", {"req_connect": "reconnect"}, referer="html/content/internet/con_ipdata.html", auth=True)
+        result = await self._post_json(
+            "data/Connect.json",
+            {"req_connect": "reconnect"},
+            referer="html/content/internet/con_ipdata.html",
+            auth=True,
+        )
         return result.get("status") == "ok"
 
     async def reboot(self) -> bool:
         """Reboot the router."""
         await self._ensure_auth()
-        result = await self._post_json("data/Reboot.json", {"reboot_device": "true"}, referer="html/content/config/restart.html", auth=True)
+        result = await self._post_json(
+            "data/Reboot.json",
+            {"reboot_device": "true"},
+            referer="html/content/config/restart.html",
+            auth=True,
+        )
         return result.get("status") == "ok"
 
     async def wps_on(self) -> bool:
         """Activate WPS."""
         await self._ensure_auth()
-        result = await self._post_json("data/WLANAccess.json", {"wlan_add": "on", "wps_key": "connect"}, referer="html/content/network/wlan_wps.html")
+        result = await self._post_json(
+            "data/WLANAccess.json",
+            {"wlan_add": "on", "wps_key": "connect"},
+            referer="html/content/network/wlan_wps.html",
+        )
+        return result.get("status") == "ok"
+
+    async def get_update_info(self) -> dict:
+        """Get firmware update information."""
+        await self._ensure_auth()
+        # First trigger a check
+        await self._post_json(
+            "data/Update.json",
+            {"req_update": "check"},
+            referer="html/content/config/check_for_updates.html",
+        )
+        # Then get the result
+        return await self._get_json(
+            "data/Update.json", referer="html/content/config/check_for_updates.html"
+        )
+
+    async def install_update(self) -> bool:
+        """Trigger firmware update installation."""
+        await self._ensure_auth()
+        result = await self._post_json(
+            "data/Update.json",
+            {"req_update": "start"},
+            referer="html/content/config/check_for_updates.html",
+        )
         return result.get("status") == "ok"

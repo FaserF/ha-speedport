@@ -10,11 +10,11 @@ from custom_components.speedport.sensor import async_setup_entry
 @pytest.mark.asyncio
 async def test_sensor_setup(hass: HomeAssistant):
     """Test sensor setup."""
-    entry = MagicMock()
-    entry.entry_id = "test_entry"
+    entry = MagicMock(entry_id="test_entry")
     entry.data = {"host": "192.168.178.200"}
     
     coordinator = MagicMock()
+    coordinator.config_entry = entry
     coordinator.data = MagicMock()
     coordinator.data.device_name = "Speedport W 724V"
     coordinator.data.onlinestatus = "online"

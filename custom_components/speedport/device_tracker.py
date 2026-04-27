@@ -1,4 +1,5 @@
 """Device tracker platform for Telekom Speedport integration."""
+
 from __future__ import annotations
 
 import logging
@@ -6,6 +7,8 @@ import logging
 from homeassistant.components.device_tracker import ScannerEntity, SourceType
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import WlanDevice
@@ -22,7 +25,9 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Speedport device trackers."""
-    coordinator: SpeedportDataCoordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator: SpeedportDataCoordinator = hass.data[DOMAIN][entry.entry_id][
+        DATA_COORDINATOR
+    ]
 
     tracked: set[str] = set()
 
@@ -54,9 +59,10 @@ class SpeedportDeviceTracker(SpeedportEntity, ScannerEntity):
         """Initialize the device tracker."""
         super().__init__(coordinator)
         assert coordinator.config_entry is not None
-        self._mac = mac
-        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_tracker_{mac}"
-        self._attr_name = mac  # Will be updated from device data
+        self._mac = mac.lower()
+        self._attr_unique_id = (
+            f"{coordinator.config_entry.entry_id}_tracker_{self._mac}"
+        )
 
     def _get_device(self) -> WlanDevice | None:
         """Get the tracked device from coordinator data."""
@@ -66,6 +72,19 @@ class SpeedportDeviceTracker(SpeedportEntity, ScannerEntity):
             if device.mac.lower() == self._mac:
                 return device
         return None
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information for the tracked client."""
+        device = self._get_device()
+        name = device.hostname if device and device.hostname else self._mac
+
+        return DeviceInfo(
+            connections={(dr.CONNECTION_NETWORK_MAC, self._mac)},
+            identifiers={(DOMAIN, self._mac)},
+            name=name,
+            via_device=(DOMAIN, self.coordinator.config_entry.entry_id),
+        )
 
     @property
     def name(self) -> str:
@@ -86,9 +105,6 @@ class SpeedportDeviceTracker(SpeedportEntity, ScannerEntity):
     @property
     def source_type(self) -> SourceType:
         """Return the source type."""
-        device = self._get_device()
-        if device and device.type == "wlan":
-            return SourceType.ROUTER
         return SourceType.ROUTER
 
     @property

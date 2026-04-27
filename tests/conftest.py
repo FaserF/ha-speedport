@@ -18,7 +18,30 @@ class MockEntityDescription:
 
 class MockEntity:
     """Base class for all mocked HA entities."""
-    pass
+    _attr_unique_id: str | None = None
+    _attr_name: str | None = None
+    _attr_available: bool = True
+
+    @property
+    def unique_id(self) -> str | None:
+        return self._attr_unique_id
+
+    @property
+    def name(self) -> str | None:
+        return self._attr_name
+
+    @property
+    def available(self) -> bool:
+        return self._attr_available
+
+    async def async_added_to_hass(self) -> None:
+        pass
+
+    def async_write_ha_state(self) -> None:
+        pass
+
+    def async_on_remove(self, func) -> None:
+        pass
 
 class MockCoordinator:
     """Base class for all mocked HA coordinators."""
@@ -34,6 +57,8 @@ def create_mock_module(name, attributes):
         setattr(mock, attr, val)
     sys.modules[name] = mock
     return mock
+
+import pytest
 
 # Setup mocks
 create_mock_module("homeassistant.helpers.entity", {"Entity": MockEntity})
@@ -54,6 +79,7 @@ create_mock_module("homeassistant.components.switch", {
 })
 create_mock_module("homeassistant.helpers.update_coordinator", {
     "DataUpdateCoordinator": MockCoordinator,
+    "CoordinatorEntity": MockCoordinator,
     "UpdateFailed": Exception,
 })
 
@@ -75,3 +101,10 @@ essential_modules = [
 for mod in essential_modules:
     if mod not in sys.modules:
         sys.modules[mod] = MagicMock()
+
+@pytest.fixture
+def hass():
+    """Mock hass fixture."""
+    mock = MagicMock()
+    mock.data = {}
+    return mock

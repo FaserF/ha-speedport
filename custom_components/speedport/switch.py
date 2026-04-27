@@ -1,4 +1,5 @@
 """Switch platform for Telekom Speedport integration."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -61,16 +62,29 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Speedport switches."""
-    coordinator: SpeedportDataCoordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator: SpeedportDataCoordinator = hass.data[DOMAIN][entry.entry_id][
+        DATA_COORDINATOR
+    ]
     client: SpeedportClient = hass.data[DOMAIN][entry.entry_id][DATA_CLIENT]
-    async_add_entities(
-        SpeedportSwitch(coordinator, client, description) for description in SWITCHES
-    )
+
+    entities = []
+    for description in SWITCHES:
+        # Filter out Office WiFi if not supported by the router
+        if (
+            description.key == "wifi_office"
+            and coordinator.data
+            and coordinator.data.wlan_office_active is None
+        ):
+            continue
+        entities.append(SpeedportSwitch(coordinator, client, description))
+
+    async_add_entities(entities)
 
 
 class SpeedportSwitch(SpeedportEntity, SwitchEntity):
     """Speedport switch entity."""
 
+    _attr_should_poll = False
     entity_description: SpeedportSwitchDescription
 
     def __init__(
@@ -85,6 +99,20 @@ class SpeedportSwitch(SpeedportEntity, SwitchEntity):
         self._client = client
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{description.key}"
+
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to hass."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self.async_write_ha_state)
+        )
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return (
+            self.coordinator.data is not None and self.coordinator.last_update_success
+        )
 
     @property
     def is_on(self) -> bool | None:
@@ -116,8 +144,3 @@ class SpeedportSwitch(SpeedportEntity, SwitchEntity):
         elif self.entity_description.key == "wifi_office":
             await self._client.set_wifi_office(False)
         await self.coordinator.async_request_refresh()
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return super().available and self.coordinator.data is not None

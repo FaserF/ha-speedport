@@ -1,10 +1,11 @@
 """Sensor platform for Telekom Speedport integration."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-import pytz
 
+import pytz
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -115,20 +116,6 @@ SENSORS: tuple[SpeedportSensorEntityDescription, ...] = (
         data_key="wlan_5ghz_ssid",
     ),
     SpeedportSensorEntityDescription(
-        key="wlan_guest_ssid",
-        translation_key="wlan_guest_ssid",
-        name="Guest WLAN SSID",
-        icon="mdi:wifi-star",
-        data_key="wlan_guest_ssid",
-    ),
-    SpeedportSensorEntityDescription(
-        key="firmware_version",
-        translation_key="firmware_version",
-        name="Firmware Version",
-        icon="mdi:chip",
-        data_key="firmware_version",
-    ),
-    SpeedportSensorEntityDescription(
         key="dns_v4",
         translation_key="dns_v4",
         name="DNS Server (IPv4)",
@@ -211,20 +198,20 @@ async def async_setup_entry(
 
     entities = []
     for description in SENSORS:
-        # Filter out LTE/5G sensors if not supported
-        if description.key.startswith("ex5g_"):
-            if not coordinator.data or not coordinator.data.use_lte:
-                continue
+        # Filter out LTE/5G sensors if the router definitely doesn't support them
+        if (
+            description.key.startswith("ex5g_") or description.key.startswith("lte_")
+        ) and (coordinator.data and coordinator.data.use_lte is False):
+            continue
         entities.append(SpeedportSensor(coordinator, description))
 
     async_add_entities(entities)
 
 
-
-
 class SpeedportSensor(SpeedportEntity, SensorEntity):
     """Speedport sensor entity."""
 
+    _attr_should_poll = False
     entity_description: SpeedportSensorEntityDescription
 
     def __init__(
@@ -237,6 +224,32 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
         assert coordinator.config_entry is not None
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{description.key}"
+
+        # Disable rarely used sensors by default
+        if description.key in (
+            "public_ip_v6",
+            "dns_v4",
+            "dsl_pop",
+            "ex5g_signal_5g",
+            "ex5g_freq_5g",
+            "ex5g_signal_lte",
+            "ex5g_freq_lte",
+        ) or description.key.startswith("ex5g_"):
+            self._attr_entity_registry_enabled_default = False
+
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to hass."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self.async_write_ha_state)
+        )
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return (
+            self.coordinator.data is not None and self.coordinator.last_update_success
+        )
 
     @property
     def native_value(self) -> StateType | datetime:
@@ -274,18 +287,11 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
         if self.entity_description.device_class == SensorDeviceClass.TIMESTAMP and val:
             try:
                 # Format is usually YYYY-MM-DD HH:MM:SS
-                date = datetime.strptime(str(val), "%Y-%m-%d %H:%M:%S").replace(second=0)
+                date = datetime.strptime(str(val), "%Y-%m-%d %H:%M:%S").replace(
+                    second=0
+                )
                 return pytz.timezone("Europe/Berlin").localize(date)
             except (ValueError, TypeError):
                 return None
 
         return val
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        if not super().available:
-            return False
-        if self.coordinator.data is None:
-            return False
-        return True

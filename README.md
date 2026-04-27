@@ -8,6 +8,9 @@
 
 A high-performance, modern Home Assistant integration for Telekom Speedport routers. Monitor your internet connection, track connected devices, manage WiFi, and control your router directly from Home Assistant.
 
+> [!IMPORTANT]
+> **Testing Disclaimer**: This integration is primarily developed and tested using a **Speedport W 724V**. While it is designed to be theoretically compatible with all Speedport routers using the native web API, I cannot guarantee full functionality for other models. Bug reports for other models can only be addressed with limited support as I lack the hardware for live testing.
+
 ---
 
 ## 🧭 Quick Links
@@ -15,10 +18,19 @@ A high-performance, modern Home Assistant integration for Telekom Speedport rout
 | | | | |
 | :--- | :--- | :--- | :--- |
 | [✨ Features](#-features) | [📦 Installation](#-installation) | [⚙️ Configuration](#-configuration) | [🛠️ Options](#-options) |
-| [🧱 Entities](#-entities) | [🧑‍💻 Development](#-development) | [📄 License](#-license) | |
+| [🧱 Entities](#-entities) | [📶 Supported Models](#-supported-models) | [🧑‍💻 Development](#-development) | [📄 License](#-license) |
 
 ### Why use this integration?
 Most Telekom Speedport routers are closed systems with limited external access. This integration uses the native web interface APIs (JSON-based) to provide real-time monitoring and control without needing any special firmware or hacks. It is designed to be stable, lightweight, and fully compatible with modern Home Assistant standards.
+
+## 📶 Supported Models
+
+| Model | Status | Notes |
+| :--- | :--- | :--- |
+| **Speedport W 724V** | ✅ **Tested** | Primary development model. |
+| Speedport Smart 3 / 4 | ⚠️ Theoretical | Should work via encrypted API, but untested. |
+| Speedport Pro / Pro Plus | ⚠️ Theoretical | Should work via encrypted API, but untested. |
+| Other W / Neo models | ⚠️ Theoretical | Basic sensors should work. |
 
 ## ✨ Features
 
@@ -80,12 +92,15 @@ The integration provides the following entities (depending on your router model)
 | **Sensor** | Public IPv4/v6 | Your external IP addresses. |
 | **Sensor** | DSL Up/Down | Synchronized DSL speeds. |
 | **Sensor** | Internet Up/Down | Real-time traffic throughput. |
+| **Sensor** | Internet Uptime | When the current session started. |
+| **Sensor** | DSL PoP | The DSL access point (Point of Presence). |
 | **Binary Sensor** | Internet Connection | Overall connectivity status. |
-| **Binary Sensor** | WiFi Active | State of the wireless radios. |
+| **Binary Sensor** | DSL Link / WiFi | State of the physical link and radios. |
 | **Switch** | WiFi / Guest WiFi | Control your wireless networks. |
-| **Button** | Reboot Router | Remotely restart the device. |
-| **Button** | Reconnect Internet | Force a WAN reconnection. |
-| **Device Tracker** | [Device Name] | Presence tracking for all clients. |
+| **Button** | Reboot / Reconnect | Remote management controls. |
+| **Button** | WPS Pairing | Trigger WPS connection process. |
+| **Update** | Firmware Update | Monitor and install router updates. |
+| **Device Tracker** | [Device Name] | Presence tracking for all network clients. |
 
 ## 🧑‍💻 Development
 

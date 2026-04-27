@@ -6,7 +6,8 @@
         "description": "Konfiguriere deinen Telekom Speedport Router",
         "data": {
           "host": "Host oder IP-Adresse",
-          "password": "Router-Passwort"
+          "password": "Router-Passwort",
+          "use_https": "HTTPS verwenden"
         }
       }
     },
@@ -41,8 +42,6 @@
       "inet_upload": {"name": "Internet-Upload"},
       "wlan_ssid": {"name": "WLAN-SSID (2,4 GHz)"},
       "wlan_5ghz_ssid": {"name": "WLAN-SSID (5 GHz)"},
-      "wlan_guest_ssid": {"name": "Gast-WLAN-SSID"},
-      "firmware_version": {"name": "Firmware-Version"},
       "dns_v4": {"name": "DNS-Server (IPv4)"},
       "connected_devices_count": {"name": "Verbundene Geräte"},
       "dsl_link_status": {"name": "DSL-Link-Status"},
@@ -57,7 +56,6 @@
       "online": {"name": "Internetverbindung"},
       "dsl_link": {"name": "DSL-Link"},
       "use_wlan": {"name": "WLAN aktiv"},
-      "wlan_guest_active": {"name": "Gast-WLAN aktiv"},
       "dualstack": {"name": "Dual-Stack (IPv4+IPv6)"},
       "dsl_tunnel": {"name": "DSL-Tunnel"},
       "lte_tunnel": {"name": "LTE-Tunnel"},
@@ -72,6 +70,9 @@
       "reboot": {"name": "Router neu starten"},
       "reconnect": {"name": "Internet neu verbinden"},
       "wps_on": {"name": "WPS aktivieren"}
+    },
+    "update": {
+      "firmware": {"name": "Firmware-Update"}
     }
   }
 }
