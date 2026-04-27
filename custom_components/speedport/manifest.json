@@ -3,13 +3,6 @@
   "name": "Telekom Speedport",
   "codeowners": [],
   "config_flow": true,
-  "documentation": "https://github.com/FaserF/ha-speedport",
-  "iot_class": "local_polling",
-  "version": "1.0.1",
-  "requirements": [
-    "pycryptodome==3.23.0",
-    "pytz==2026.1.post1"
-  ],
   "dhcp": [
     {
       "hostname": "speedport.ip"
@@ -39,6 +32,17 @@
       "macaddress": "E43ED7*"
     }
   ],
+  "documentation": "https://github.com/FaserF/ha-speedport",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/FaserF/ha-speedport/issues",
+  "loggers": [
+    "custom_components.speedport"
+  ],
+  "requirements": [
+    "pycryptodome==3.23.0",
+    "pytz==2026.1.post1"
+  ],
   "ssdp": [
     {
       "manufacturer": "Deutsche Telekom*"
@@ -47,8 +51,5 @@
       "modelName": "Speedport*"
     }
   ],
-  "integration_type": "hub",
-  "loggers": [
-    "custom_components.speedport"
-  ]
+  "version": "1.0.1"
 }
