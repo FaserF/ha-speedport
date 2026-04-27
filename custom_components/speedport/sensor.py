@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-import pytz  # type: ignore[import-untyped]
+import pytz
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
