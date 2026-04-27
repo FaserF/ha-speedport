@@ -20,7 +20,7 @@ class SpeedportEntity:
         assert coordinator.config_entry is not None
 
     @property
-    def device_info(self) -> DeviceInfo:
+    def device_info(self) -> DeviceInfo | None:
         """Return device information."""
         data = self.coordinator.data
         config_entry = self.coordinator.config_entry
