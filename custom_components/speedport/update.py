@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, cast
+from typing import Any
 
 from homeassistant.components.update import (
     UpdateDeviceClass,
@@ -34,7 +34,7 @@ async def async_setup_entry(
     async_add_entities([SpeedportUpdateEntity(coordinator)])
 
 
-class SpeedportUpdateEntity(SpeedportEntity, UpdateEntity):  # type: ignore[misc]
+class SpeedportUpdateEntity(SpeedportEntity, UpdateEntity):
     """Speedport update entity."""
 
     _attr_device_class = UpdateDeviceClass.FIRMWARE
@@ -53,28 +53,26 @@ class SpeedportUpdateEntity(SpeedportEntity, UpdateEntity):  # type: ignore[misc
         """Return the installed version."""
         if self.coordinator.data is None:
             return None
-        return cast(str | None, self.coordinator.data.firmware_version)
+        return self.coordinator.data.firmware_version
 
     @property
     def latest_version(self) -> str | None:
         """Return the latest version."""
         if self.coordinator.data is None:
             return None
-        return cast(str | None, self.coordinator.data.firmware_version_available)
+        return self.coordinator.data.latest_version
 
     @property
     def in_progress(self) -> bool:
         """Return if update is in progress."""
-        if self.coordinator.data is None:
-            return False
-        return cast(bool, self.coordinator.data.firmware_update_state == "downloading")
+        return False
 
     @property
     def update_available(self) -> bool:
         """Return True if an update is available."""
         if self.coordinator.data is None:
             return False
-        return cast(bool, self.coordinator.data.update_available)
+        return self.coordinator.data.update_available
 
     async def async_install(
         self, version: str | None, backup: bool, **kwargs: Any

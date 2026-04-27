@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-import pytz
+import pytz  # type: ignore[import-untyped]
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -208,7 +208,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class SpeedportSensor(SpeedportEntity, SensorEntity):  # type: ignore[misc]
+class SpeedportSensor(SpeedportEntity, SensorEntity):
     """Speedport sensor entity."""
 
     _attr_should_poll = False
@@ -279,7 +279,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):  # type: ignore[misc]
             UnitOfDataRate.BITS_PER_SECOND,
         ):
             try:
-                return int(val)
+                return int(val) if val is not None else None
             except TypeError, ValueError:
                 return None
 

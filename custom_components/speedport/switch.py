@@ -17,7 +17,7 @@ from .entity import SpeedportEntity
 
 
 @dataclass(frozen=True, kw_only=True)
-class SpeedportSwitchDescription(SwitchEntityDescription):  # type: ignore[misc]
+class SpeedportSwitchDescription(SwitchEntityDescription):
     """Description for Speedport switches."""
 
     data_key: str = ""
@@ -81,7 +81,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class SpeedportSwitch(SpeedportEntity, SwitchEntity):  # type: ignore[misc]
+class SpeedportSwitch(SpeedportEntity, SwitchEntity):
     """Speedport switch entity."""
 
     _attr_should_poll = False

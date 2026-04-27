@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, cast
+from typing import Any
 
-from homeassistant.components.device_tracker import ScannerEntity, SourceType
+from homeassistant.components.device_tracker.config_entry import ScannerEntity
+from homeassistant.components.device_tracker.const import SourceType
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
@@ -32,7 +33,7 @@ async def async_setup_entry(
 
     tracked: set[str] = set()
 
-    @callback  # type: ignore[untyped-decorator]
+    @callback
     def _add_new_devices() -> None:
         """Add any new devices from the latest coordinator data."""
         if coordinator.data is None:
@@ -53,23 +54,22 @@ async def async_setup_entry(
     _add_new_devices()
 
 
-class SpeedportDeviceTracker(ScannerEntity, SpeedportEntity):  # type: ignore[misc]
+class SpeedportDeviceTracker(ScannerEntity, SpeedportEntity):
     """Speedport device tracker entity."""
 
     def __init__(self, coordinator: SpeedportDataCoordinator, mac: str) -> None:
         """Initialize the device tracker."""
         super().__init__(coordinator)
-        assert coordinator.config_entry is not None
         self._mac = mac.lower()
         self._attr_unique_id = (
-            f"{coordinator.config_entry.entry_id}_tracker_{self._mac}"
+            f"{self.coordinator.config_entry.entry_id}_tracker_{self._mac}"
         )
 
     def _get_device(self) -> WlanDevice | None:
         """Get the tracked device from coordinator data."""
         if self.coordinator.data is None:
             return None
-        return cast(WlanDevice | None, self.coordinator.data.get_device(self._mac))
+        return self.coordinator.data.get_device(self._mac)
 
     @property
     def device_info(self) -> DeviceInfo:

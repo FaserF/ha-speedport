@@ -228,6 +228,14 @@ class SpeedportData:
         """Get a value from raw data."""
         return self.raw.get(key, default)
 
+    def get_device(self, mac: str) -> WlanDevice | None:
+        """Get a device by its MAC address."""
+        mac_lower = mac.lower()
+        for device in self.devices:
+            if device.mac.lower() == mac_lower:
+                return device
+        return None
+
 
 class SpeedportAuthError(Exception):
     """Authentication failed."""

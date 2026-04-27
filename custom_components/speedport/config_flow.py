@@ -39,7 +39,7 @@ OPTIONS_SCHEMA = vol.Schema(
 )
 
 
-class SpeedportConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[misc, call-arg]
+class SpeedportConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle the config flow for Speedport."""
 
     VERSION = 1
@@ -107,7 +107,7 @@ class SpeedportConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
         return SpeedportOptionsFlow(config_entry)
 
 
-class SpeedportOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
+class SpeedportOptionsFlow(config_entries.OptionsFlow):
     """Handle Speedport options."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
