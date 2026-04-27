@@ -3,6 +3,9 @@
   "name": "Telekom Speedport",
   "codeowners": [],
   "config_flow": true,
+  "dependencies": [
+    "network"
+  ],
   "dhcp": [
     {
       "hostname": "speedport.ip"

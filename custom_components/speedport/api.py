@@ -136,6 +136,14 @@ class WlanDevice:
     rssi: str = ""
     fix_dhcp: str = ""
     ipv6: str = ""
+    gua_ipv6: str = ""
+    ula_ipv6: str = ""
+    hasui: str = ""
+    reservedip: str = ""
+    slave: str = ""
+    use_dhcp: str = ""
+    wifi: str = ""
+    id: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> WlanDevice:
@@ -160,6 +168,14 @@ class WlanDevice:
             rssi=data.get("mdevice_rssi", data.get("device_rssi", "")),
             fix_dhcp=data.get("mdevice_fix_dhcp", data.get("device_fix_dhcp", "")),
             ipv6=data.get("mdevice_ipv6", data.get("device_ipv6", "")),
+            gua_ipv6=data.get("mdevice_gua_ipv6", data.get("gua_ipv6", "")),
+            ula_ipv6=data.get("mdevice_ula_ipv6", data.get("ula_ipv6", "")),
+            hasui=data.get("mdevice_hasui", data.get("hasui", "")),
+            reservedip=data.get("mdevice_reservedip", data.get("reservedip", "")),
+            slave=data.get("mdevice_slave", data.get("slave", "")),
+            use_dhcp=data.get("mdevice_use_dhcp", data.get("use_dhcp", "")),
+            wifi=data.get("mdevice_wifi", data.get("wifi", "")),
+            id=data.get("mdevice_id", data.get("id", "")),
         )
 
 

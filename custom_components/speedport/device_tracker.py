@@ -132,5 +132,13 @@ class SpeedportDeviceTracker(ScannerEntity, SpeedportEntity):
             "downspeed": device.downspeed,
             "upspeed": device.upspeed,
             "ipv6": device.ipv6,
+            "gua_ipv6": device.gua_ipv6,
+            "ula_ipv6": device.ula_ipv6,
             "fixed_dhcp": device.fix_dhcp,
+            "hasui": device.hasui,
+            "reservedip": device.reservedip,
+            "slave": device.slave,
+            "use_dhcp": device.use_dhcp,
+            "wifi": device.wifi,
+            "id": device.id,
         }
