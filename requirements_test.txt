@@ -7,3 +7,8 @@ pytest-cov==7.0.0
 respx==0.22.0
 syrupy==5.1.0
 types-pytz==2026.1.1.20260408
+aiohttp
+voluptuous
+yarl
+aioresponses
+homeassistant

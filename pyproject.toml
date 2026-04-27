@@ -5,6 +5,9 @@ description = "Telekom Speedport integration for Home Assistant"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "aiohttp",
+    "voluptuous",
+    "yarl",
     "pycryptodome==3.23.0",
     "pytz==2026.1.post1",
 ]
