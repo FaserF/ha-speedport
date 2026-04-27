@@ -19,7 +19,7 @@ from .entity import SpeedportEntity
 
 
 @dataclass(frozen=True, kw_only=True)
-class SpeedportBinarySensorDescription(BinarySensorEntityDescription):
+class SpeedportBinarySensorDescription(BinarySensorEntityDescription):  # type: ignore[misc]
     """Description for Speedport binary sensors."""
 
     data_key: str = ""
@@ -107,7 +107,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class SpeedportBinarySensor(SpeedportEntity, BinarySensorEntity):
+class SpeedportBinarySensor(SpeedportEntity, BinarySensorEntity):  # type: ignore[misc]
     """Speedport binary sensor entity."""
 
     _attr_should_poll = False

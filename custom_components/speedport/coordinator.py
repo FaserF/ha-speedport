@@ -22,7 +22,7 @@ from .const import CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
-class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
+class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):  # type: ignore[misc]
     """Coordinator that fetches data from a Speedport router."""
 
     def __init__(

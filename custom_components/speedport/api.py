@@ -12,7 +12,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from hashlib import md5, sha256
-from typing import Any
+from typing import Any, cast
 
 import aiohttp
 from Crypto.Cipher import AES
@@ -79,7 +79,7 @@ def _decode(data: str, key: str = DEFAULT_KEY) -> dict[str, Any] | str:
         )
         text = decrypted.decode("utf-8")
         try:
-            parsed = json.loads(text)
+            parsed = cast(dict[str, Any] | list[Any], json.loads(text))
             if isinstance(parsed, list):
                 return _simplify_response(parsed)
             return parsed
@@ -403,14 +403,16 @@ class SpeedportClient:
                 # If data is empty for Overview, try fallback to Login.json
                 if not data and path == "data/Overview.json":
                     _LOGGER.debug("Overview.json empty, trying Login.json fallback")
-                    return await self._get_json("data/Login.json", referer=referer)
+                    return dict(
+                        await self._get_json("data/Login.json", referer=referer)
+                    )
 
                 return data
         except aiohttp.ClientError as exc:
             raise SpeedportConnectionError(f"GET {url} failed: {exc}") from exc
 
     async def _post_json(
-        self, path: str, data: dict[str, str], referer: str = "", auth: bool = False
+        self, path: str, data: dict[str, Any], referer: str = "", auth: bool = False
     ) -> dict[str, Any]:
         """Perform a POST request and parse the JSON response."""
         url = f"{self._base_url}/{path}"
@@ -885,7 +887,7 @@ class SpeedportClient:
         )
         return result.get("status") == "ok"
 
-    async def get_update_info(self) -> dict:
+    async def get_update_info(self) -> dict[str, Any]:
         """Get firmware update information."""
         await self._ensure_auth()
         # First trigger a check

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any, cast
 
 from homeassistant.components.device_tracker import ScannerEntity, SourceType
 from homeassistant.config_entries import ConfigEntry
@@ -31,7 +32,7 @@ async def async_setup_entry(
 
     tracked: set[str] = set()
 
-    @callback
+    @callback  # type: ignore[untyped-decorator]
     def _add_new_devices() -> None:
         """Add any new devices from the latest coordinator data."""
         if coordinator.data is None:
@@ -52,7 +53,7 @@ async def async_setup_entry(
     _add_new_devices()
 
 
-class SpeedportDeviceTracker(SpeedportEntity, ScannerEntity):
+class SpeedportDeviceTracker(ScannerEntity, SpeedportEntity):  # type: ignore[misc]
     """Speedport device tracker entity."""
 
     def __init__(self, coordinator: SpeedportDataCoordinator, mac: str) -> None:
@@ -68,10 +69,7 @@ class SpeedportDeviceTracker(SpeedportEntity, ScannerEntity):
         """Get the tracked device from coordinator data."""
         if self.coordinator.data is None:
             return None
-        for device in self.coordinator.data.devices:
-            if device.mac.lower() == self._mac:
-                return device
-        return None
+        return cast(WlanDevice | None, self.coordinator.data.get_device(self._mac))
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -125,7 +123,7 @@ class SpeedportDeviceTracker(SpeedportEntity, ScannerEntity):
         return device.hostname if device else None
 
     @property
-    def extra_state_attributes(self) -> dict:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra attributes."""
         device = self._get_device()
         if device is None:

@@ -16,7 +16,7 @@ from .entity import SpeedportEntity
 
 
 @dataclass(frozen=True, kw_only=True)
-class SpeedportButtonDescription(ButtonEntityDescription):
+class SpeedportButtonDescription(ButtonEntityDescription):  # type: ignore[misc]
     """Description for Speedport buttons."""
 
     action: str = ""
@@ -62,7 +62,7 @@ async def async_setup_entry(
     )
 
 
-class SpeedportButton(SpeedportEntity, ButtonEntity):
+class SpeedportButton(SpeedportEntity, ButtonEntity):  # type: ignore[misc]
     """Speedport button entity."""
 
     entity_description: SpeedportButtonDescription

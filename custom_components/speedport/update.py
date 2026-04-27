@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.components.update import (
     UpdateDeviceClass,
@@ -34,12 +34,13 @@ async def async_setup_entry(
     async_add_entities([SpeedportUpdateEntity(coordinator)])
 
 
-class SpeedportUpdateEntity(SpeedportEntity, UpdateEntity):
+class SpeedportUpdateEntity(SpeedportEntity, UpdateEntity):  # type: ignore[misc]
     """Speedport update entity."""
 
     _attr_device_class = UpdateDeviceClass.FIRMWARE
     _attr_supported_features = UpdateEntityFeature.INSTALL
     _attr_name = "Firmware Update"
+    _attr_should_poll = False
 
     def __init__(self, coordinator: SpeedportDataCoordinator) -> None:
         """Initialize the update entity."""
@@ -49,28 +50,31 @@ class SpeedportUpdateEntity(SpeedportEntity, UpdateEntity):
 
     @property
     def installed_version(self) -> str | None:
-        """Version installed and in use."""
+        """Return the installed version."""
         if self.coordinator.data is None:
             return None
-        return self.coordinator.data.firmware_version
+        return cast(str | None, self.coordinator.data.firmware_version)
 
     @property
     def latest_version(self) -> str | None:
-        """Latest version available for install."""
+        """Return the latest version."""
         if self.coordinator.data is None:
             return None
-        # If no new version is found, latest version is the installed one
-        return (
-            self.coordinator.data.latest_version
-            or self.coordinator.data.firmware_version
-        )
+        return cast(str | None, self.coordinator.data.firmware_version_available)
+
+    @property
+    def in_progress(self) -> bool:
+        """Return if update is in progress."""
+        if self.coordinator.data is None:
+            return False
+        return cast(bool, self.coordinator.data.firmware_update_state == "downloading")
 
     @property
     def update_available(self) -> bool:
         """Return True if an update is available."""
         if self.coordinator.data is None:
             return False
-        return self.coordinator.data.update_available
+        return cast(bool, self.coordinator.data.update_available)
 
     async def async_install(
         self, version: str | None, backup: bool, **kwargs: Any
