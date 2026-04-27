@@ -279,7 +279,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
             UnitOfDataRate.BITS_PER_SECOND,
         ):
             try:
-                return int(val)  # type: ignore[arg-type]
+                return int(val)
             except (TypeError, ValueError):
                 return None
 

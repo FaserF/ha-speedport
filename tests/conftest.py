@@ -1,8 +1,12 @@
 """Pytest configuration and fixtures for the Speedport integration tests."""
+
 import sys
-from unittest.mock import MagicMock
 from dataclasses import dataclass
 from typing import Any
+from unittest.mock import MagicMock
+
+import pytest
+
 
 # Provide minimal real classes for common HA base classes to support dataclasses
 @dataclass(frozen=True)
@@ -16,8 +20,10 @@ class MockEntityDescription:
     state_class: Any | None = None
     native_unit_of_measurement: str | None = None
 
+
 class MockEntity:
     """Base class for all mocked HA entities."""
+
     _attr_unique_id: str | None = None
     _attr_name: str | None = None
     _attr_available: bool = True
@@ -43,12 +49,16 @@ class MockEntity:
     def async_on_remove(self, func) -> None:
         pass
 
+
 class MockCoordinator:
     """Base class for all mocked HA coordinators."""
+
     def __init__(self, *args, **kwargs):
         pass
+
     def __class_getitem__(cls, item):
         return cls
+
 
 # Create a module factory to avoid MagicMock issues
 def create_mock_module(name, attributes):
@@ -58,30 +68,41 @@ def create_mock_module(name, attributes):
     sys.modules[name] = mock
     return mock
 
-import pytest
 
 # Setup mocks
 create_mock_module("homeassistant.helpers.entity", {"Entity": MockEntity})
-create_mock_module("homeassistant.components.sensor", {
-    "SensorEntity": MockEntity,
-    "SensorEntityDescription": MockEntityDescription,
-    "SensorDeviceClass": MagicMock(),
-    "SensorStateClass": MagicMock(),
-})
-create_mock_module("homeassistant.components.binary_sensor", {
-    "BinarySensorEntity": MockEntity,
-    "BinarySensorEntityDescription": MockEntityDescription,
-    "BinarySensorDeviceClass": MagicMock(),
-})
-create_mock_module("homeassistant.components.switch", {
-    "SwitchEntity": MockEntity,
-    "SwitchEntityDescription": MockEntityDescription,
-})
-create_mock_module("homeassistant.helpers.update_coordinator", {
-    "DataUpdateCoordinator": MockCoordinator,
-    "CoordinatorEntity": MockCoordinator,
-    "UpdateFailed": Exception,
-})
+create_mock_module(
+    "homeassistant.components.sensor",
+    {
+        "SensorEntity": MockEntity,
+        "SensorEntityDescription": MockEntityDescription,
+        "SensorDeviceClass": MagicMock(),
+        "SensorStateClass": MagicMock(),
+    },
+)
+create_mock_module(
+    "homeassistant.components.binary_sensor",
+    {
+        "BinarySensorEntity": MockEntity,
+        "BinarySensorEntityDescription": MockEntityDescription,
+        "BinarySensorDeviceClass": MagicMock(),
+    },
+)
+create_mock_module(
+    "homeassistant.components.switch",
+    {
+        "SwitchEntity": MockEntity,
+        "SwitchEntityDescription": MockEntityDescription,
+    },
+)
+create_mock_module(
+    "homeassistant.helpers.update_coordinator",
+    {
+        "DataUpdateCoordinator": MockCoordinator,
+        "CoordinatorEntity": MockCoordinator,
+        "UpdateFailed": Exception,
+    },
+)
 
 # Mock other essential modules
 essential_modules = [
@@ -101,6 +122,7 @@ essential_modules = [
 for mod in essential_modules:
     if mod not in sys.modules:
         sys.modules[mod] = MagicMock()
+
 
 @pytest.fixture
 def hass():
