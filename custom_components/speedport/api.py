@@ -807,6 +807,29 @@ class SpeedportClient:
             list(raw.keys()),
         )
 
+        is_legacy = any(
+            x in str(raw.get("domain_name", "")).upper()
+            or x in str(raw.get("device_name", "")).upper()
+            or x in str(raw.get("model_name", "")).upper()
+            for x in ("W_724V", "W 724V")
+        )
+
+        dsl_down = _int(raw.get("dsl_downstream", raw.get("dsl_ds_synchro", 0)))
+        dsl_up = _int(raw.get("dsl_upstream", raw.get("dsl_us_synchro", 0)))
+        inet_down = _int(raw.get("inet_download", 0))
+        inet_up = _int(raw.get("inet_upload", 0))
+
+        if not is_legacy:
+            # Modern models return bits/s, convert to kbits/s
+            if dsl_down is not None:
+                dsl_down = dsl_down // 1000
+            if dsl_up is not None:
+                dsl_up = dsl_up // 1000
+            if inet_down is not None:
+                inet_down = inet_down // 1000
+            if inet_up is not None:
+                inet_up = inet_up // 1000
+
         return SpeedportData(
             device_name=raw.get("device_name", raw.get("model_name", "Speedport")),
             firmware_version=firmware,
@@ -818,14 +841,10 @@ class SpeedportClient:
             dsl_link_status=raw.get(
                 "dsl_link_status", raw.get("dsl_link", raw.get("status", ""))
             ),
-            # W 724V uses "dsl_ds_synchro" (in kbps) for downstream
-            dsl_downstream=_int(
-                raw.get("dsl_downstream", raw.get("dsl_ds_synchro", 0))
-            ),
-            dsl_upstream=_int(raw.get("dsl_upstream", raw.get("dsl_us_synchro", 0))),
-            # W 724V: "inet_download" / "inet_upload" (default to 0 if missing)
-            inet_download=_int(raw.get("inet_download", 0)),
-            inet_upload=_int(raw.get("inet_upload", 0)),
+            dsl_downstream=dsl_down,
+            dsl_upstream=dsl_up,
+            inet_download=inet_down,
+            inet_upload=inet_up,
             # W 724V uptime (default to empty string if missing)
             inet_uptime=raw.get("inet_uptime", raw.get("onlinetime", "")),
             dsl_pop=raw.get("dsl_pop", raw.get("dsl_pop_name", "Unknown")),
