@@ -25,11 +25,13 @@
       "init": {
         "title": "Speedport Options",
         "data": {
-          "update_interval": "Update interval (seconds)"
+          "update_interval": "Update interval (seconds)",
+          "enable_device_tracker": "Enable device tracking"
         }
       }
     }
   },
+
   "entity": {
     "sensor": {
       "router_state": {"name": "Router State"},

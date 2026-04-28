@@ -25,11 +25,13 @@
       "init": {
         "title": "Speedport Optionen",
         "data": {
-          "update_interval": "Aktualisierungsintervall (Sekunden)"
+          "update_interval": "Aktualisierungsintervall (Sekunden)",
+          "enable_device_tracker": "Geräteerkennung aktivieren"
         }
       }
     }
   },
+
   "entity": {
     "sensor": {
       "router_state": {"name": "Router-Status"},

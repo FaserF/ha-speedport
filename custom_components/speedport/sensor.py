@@ -134,7 +134,7 @@ SENSORS: tuple[SpeedportSensorEntityDescription, ...] = (
         key="dsl_link_status",
         translation_key="dsl_link_status",
         name="DSL Link Status",
-        icon="mdi:dsl",
+        icon="mdi:router-network",
         data_key="dsl_link_status",
     ),
     SpeedportSensorEntityDescription(

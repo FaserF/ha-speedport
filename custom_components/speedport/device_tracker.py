@@ -14,7 +14,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import WlanDevice
-from .const import DATA_COORDINATOR, DOMAIN
+from .const import CONF_ENABLE_DEVICE_TRACKER, DATA_COORDINATOR, DOMAIN
 from .coordinator import SpeedportDataCoordinator
 from .entity import SpeedportEntity
 
@@ -27,6 +27,9 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Speedport device trackers."""
+    if not entry.options.get(CONF_ENABLE_DEVICE_TRACKER, True):
+        return
+
     coordinator: SpeedportDataCoordinator = hass.data[DOMAIN][entry.entry_id][
         DATA_COORDINATOR
     ]

@@ -13,6 +13,7 @@ from yarl import URL
 
 from .api import SpeedportAuthError, SpeedportClient, SpeedportConnectionError
 from .const import (
+    CONF_ENABLE_DEVICE_TRACKER,
     CONF_PASSWORD,
     CONF_UPDATE_INTERVAL,
     CONF_USE_HTTPS,
@@ -124,6 +125,9 @@ class SpeedportOptionsFlow(config_entries.OptionsFlow):
         current_interval = self.config_entry.options.get(
             CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
         )
+        current_enable_device_tracker = self.config_entry.options.get(
+            CONF_ENABLE_DEVICE_TRACKER, True
+        )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
@@ -131,6 +135,10 @@ class SpeedportOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_UPDATE_INTERVAL, default=current_interval
                     ): vol.All(vol.Coerce(int), vol.Range(min=10, max=3600)),
+                    vol.Optional(
+                        CONF_ENABLE_DEVICE_TRACKER,
+                        default=current_enable_device_tracker,
+                    ): bool,
                 }
             ),
         )
