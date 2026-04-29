@@ -278,7 +278,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
         ):
             try:
                 return int(val) if val is not None else None
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 return None
 
         # Handle timestamp sensors
@@ -289,7 +289,34 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
                     second=0
                 )
                 return pytz.timezone("Europe/Berlin").localize(date)
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 return None
 
         return val
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        if self.coordinator.data is None:
+            return {}
+        data = self.coordinator.data
+        if self.entity_description.key == "router_state":
+            return {
+                "mac": data.mac,
+                "device_name": data.device_name,
+                "model_name": data.raw.get("model_name") or data.raw.get("device_type"),
+            }
+        if self.entity_description.key == "connected_devices_count":
+            return {
+                "devices": [
+                    {
+                        "name": d.hostname or "Unknown",
+                        "ip": d.ip,
+                        "mac": d.mac,
+                        "type": d.type,
+                    }
+                    for d in data.devices
+                    if d.connected
+                ]
+            }
+        return {}

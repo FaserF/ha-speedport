@@ -1,6 +1,30 @@
 reboot:
   description: "Reboots the Speedport router."
+  fields:
+    entry_id:
+      description: "Optional config entry ID to reboot a specific router."
+      example: "3b266a90997d6057a922c069137ef274"
 reconnect:
   description: "Reconnects the internet connection to get a new public IP."
+  fields:
+    entry_id:
+      description: "Optional config entry ID to reconnect a specific router."
+      example: "3b266a90997d6057a922c069137ef274"
 wps_on:
   description: "Activates WPS for 2 minutes."
+  fields:
+    entry_id:
+      description: "Optional config entry ID to activate WPS on a specific router."
+      example: "3b266a90997d6057a922c069137ef274"
+get_raw_data:
+  description: "Returns the raw data from the Speedport router as a service response."
+  fields:
+    entry_id:
+      description: "The config entry ID of the Speedport router. Required if multiple routers are configured."
+      example: "3b266a90997d6057a922c069137ef274"
+generate_report:
+  description: "Generates a markdown report of the Speedport system status."
+  fields:
+    entry_id:
+      description: "Optional config entry ID to generate a report for a specific router."
+      example: "3b266a90997d6057a922c069137ef274"

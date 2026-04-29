@@ -8,7 +8,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import aiohttp_client
 from homeassistant.helpers import config_validation as cv
@@ -24,6 +24,8 @@ from .const import (
     SERVICE_REBOOT,
     SERVICE_RECONNECT,
     SERVICE_WPS_ON,
+    SERVICE_GET_RAW_DATA,
+    SERVICE_GENERATE_REPORT,
 )
 from .coordinator import SpeedportDataCoordinator
 
@@ -92,41 +94,117 @@ def _register_services(hass: HomeAssistant) -> None:
     """Register Speedport services."""
 
     async def _handle_reboot(call: ServiceCall) -> None:
-        for data in hass.data[DOMAIN].values():
-            if not isinstance(data, dict):
+        entry_id = call.data.get("entry_id")
+        for eid, data in hass.data[DOMAIN].items():
+            if entry_id and eid != entry_id:
                 continue
             client: SpeedportClient = data[DATA_CLIENT]
             await client.reboot()
 
     async def _handle_reconnect(call: ServiceCall) -> None:
-        for data in hass.data[DOMAIN].values():
-            if not isinstance(data, dict):
+        entry_id = call.data.get("entry_id")
+        for eid, data in hass.data[DOMAIN].items():
+            if entry_id and eid != entry_id:
                 continue
             client: SpeedportClient = data[DATA_CLIENT]
             await client.reconnect()
 
     async def _handle_wps_on(call: ServiceCall) -> None:
-        for data in hass.data[DOMAIN].values():
-            if not isinstance(data, dict):
+        entry_id = call.data.get("entry_id")
+        for eid, data in hass.data[DOMAIN].items():
+            if entry_id and eid != entry_id:
                 continue
             client: SpeedportClient = data[DATA_CLIENT]
             await client.wps_on()
+
+    async def _handle_get_raw_data(call: ServiceCall) -> ServiceResponse:
+        """Handle the service call."""
+        entry_id = call.data.get("entry_id")
+        if not entry_id:
+            if len(hass.data[DOMAIN]) == 1:
+                entry_id = list(hass.data[DOMAIN].keys())[0]
+            else:
+                raise vol.Invalid("Multiple Speedports configured, entry_id is required")
+
+        if entry_id not in hass.data[DOMAIN]:
+            raise vol.Invalid(f"Config entry {entry_id} not found")
+
+        coordinator: SpeedportDataCoordinator = hass.data[DOMAIN][entry_id][
+            DATA_COORDINATOR
+        ]
+        return coordinator.data.raw if coordinator.data else {}
+
+    async def _handle_generate_report(call: ServiceCall) -> ServiceResponse:
+        """Handle the service call."""
+        entry_id = call.data.get("entry_id")
+        if not entry_id:
+            if len(hass.data[DOMAIN]) == 1:
+                entry_id = list(hass.data[DOMAIN].keys())[0]
+            else:
+                raise vol.Invalid("Multiple Speedports configured, entry_id is required")
+
+        if entry_id not in hass.data[DOMAIN]:
+            raise vol.Invalid(f"Config entry {entry_id} not found")
+
+        coordinator: SpeedportDataCoordinator = hass.data[DOMAIN][entry_id][
+            DATA_COORDINATOR
+        ]
+        data = coordinator.data
+        if not data:
+            return {"report": "No data available"}
+
+        report = f"# Speedport System Report - {data.device_name}\n\n"
+        report += f"**Model:** {data.device_name}\n"
+        report += f"**Firmware:** {data.firmware_version}\n"
+        report += f"**Serial Number:** {data.serial_number}\n"
+        report += f"**Online Status:** {data.online_status}\n"
+        report += f"**DSL Link:** {data.dsl_link_status}\n\n"
+
+        report += "## Connection Details\n"
+        report += f"- IPv4: {data.public_ip_v4}\n"
+        report += f"- IPv6: {data.public_ip_v6}\n"
+        report += f"- Uptime: {data.inet_uptime}\n\n"
+
+        report += "## Network\n"
+        report += f"- Connected Devices: {len(data.devices)}\n"
+        report += f"- WiFi Active: {data.use_wlan}\n"
+        report += f"- Guest WiFi: {data.wlan_guest_active}\n\n"
+
+        report += "## Device List\n"
+        for device in data.devices[:20]:  # Limit to 20 devices
+            report += f"- {device.hostname or 'Unknown'} ({device.mac}) - {device.ip} [{device.type}]\n"
+
+        return {"report": report}
 
     hass.services.async_register(
         DOMAIN,
         SERVICE_REBOOT,
         _handle_reboot,
-        schema=vol.Schema({}),
+        schema=vol.Schema({vol.Optional("entry_id"): cv.string}),
     )
     hass.services.async_register(
         DOMAIN,
         SERVICE_RECONNECT,
         _handle_reconnect,
-        schema=vol.Schema({}),
+        schema=vol.Schema({vol.Optional("entry_id"): cv.string}),
     )
     hass.services.async_register(
         DOMAIN,
         SERVICE_WPS_ON,
         _handle_wps_on,
-        schema=vol.Schema({}),
+        schema=vol.Schema({vol.Optional("entry_id"): cv.string}),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_RAW_DATA,
+        _handle_get_raw_data,
+        schema=vol.Schema({vol.Optional("entry_id"): cv.string}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GENERATE_REPORT,
+        _handle_generate_report,
+        schema=vol.Schema({vol.Optional("entry_id"): cv.string}),
+        supports_response=SupportsResponse.ONLY,
     )

@@ -43,3 +43,5 @@ SPEEDPORT_DEFAULT_KEY: Final = (
 SERVICE_REBOOT: Final = "reboot"
 SERVICE_RECONNECT: Final = "reconnect"
 SERVICE_WPS_ON: Final = "wps_on"
+SERVICE_GET_RAW_DATA: Final = "get_raw_data"
+SERVICE_GENERATE_REPORT: Final = "generate_report"

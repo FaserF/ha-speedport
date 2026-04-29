@@ -76,9 +76,46 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
         except Exception as err:
             _LOGGER.debug("Failed to fetch update info: %s", err)
 
+        # Fire events for IP changes and new devices
+        self._async_fire_events(data)
+
         # Update device registry
         await self._async_update_device_registry(data)
         return data
+
+    def _async_fire_events(self, data: SpeedportData) -> None:
+        """Fire events for state changes."""
+        if self.data is None:
+            return
+
+        # Public IP change
+        if (
+            data.public_ip_v4
+            and self.data.public_ip_v4
+            and data.public_ip_v4 != self.data.public_ip_v4
+        ):
+            self.hass.bus.async_fire(
+                f"{DOMAIN}_public_ip_changed",
+                {
+                    "old_ip": self.data.public_ip_v4,
+                    "new_ip": data.public_ip_v4,
+                    "host": self.config_entry.data.get(CONF_HOST),
+                },
+            )
+
+        # New devices
+        old_macs = {d.mac.lower() for d in self.data.devices}
+        for device in data.devices:
+            if device.mac.lower() not in old_macs:
+                self.hass.bus.async_fire(
+                    f"{DOMAIN}_new_device",
+                    {
+                        "mac": device.mac,
+                        "hostname": device.hostname,
+                        "ip": device.ip,
+                        "host": self.config_entry.data.get(CONF_HOST),
+                    },
+                )
 
     async def _async_update_device_registry(self, data: SpeedportData) -> None:
         """Register/update the router in the device registry."""
