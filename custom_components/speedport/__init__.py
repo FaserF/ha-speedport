@@ -8,7 +8,12 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
-from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+)
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import aiohttp_client
 from homeassistant.helpers import config_validation as cv
@@ -21,11 +26,11 @@ from .const import (
     DATA_COORDINATOR,
     DOMAIN,
     PLATFORMS,
+    SERVICE_GENERATE_REPORT,
+    SERVICE_GET_RAW_DATA,
     SERVICE_REBOOT,
     SERVICE_RECONNECT,
     SERVICE_WPS_ON,
-    SERVICE_GET_RAW_DATA,
-    SERVICE_GENERATE_REPORT,
 )
 from .coordinator import SpeedportDataCoordinator
 
@@ -124,7 +129,9 @@ def _register_services(hass: HomeAssistant) -> None:
             if len(hass.data[DOMAIN]) == 1:
                 entry_id = list(hass.data[DOMAIN].keys())[0]
             else:
-                raise vol.Invalid("Multiple Speedports configured, entry_id is required")
+                raise vol.Invalid(
+                    "Multiple Speedports configured, entry_id is required"
+                )
 
         if entry_id not in hass.data[DOMAIN]:
             raise vol.Invalid(f"Config entry {entry_id} not found")
@@ -141,7 +148,9 @@ def _register_services(hass: HomeAssistant) -> None:
             if len(hass.data[DOMAIN]) == 1:
                 entry_id = list(hass.data[DOMAIN].keys())[0]
             else:
-                raise vol.Invalid("Multiple Speedports configured, entry_id is required")
+                raise vol.Invalid(
+                    "Multiple Speedports configured, entry_id is required"
+                )
 
         if entry_id not in hass.data[DOMAIN]:
             raise vol.Invalid(f"Config entry {entry_id} not found")

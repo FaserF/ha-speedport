@@ -181,3 +181,4 @@ Thumbs.db
 !tests/**
 /custom_components/speedport/__pycache__
 /tests/__pycache__
+discovery.py
