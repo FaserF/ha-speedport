@@ -24,6 +24,10 @@ class MockEntityDescription:
 class MockEntity:
     """Base class for all mocked HA entities."""
 
+    def __init__(self, *args, **kwargs):
+        pass
+
+
     _attr_unique_id: str | None = None
     _attr_name: str | None = None
     _attr_available: bool = True
@@ -112,7 +116,6 @@ create_mock_module(
 
 # Mock other essential modules
 essential_modules = [
-    "homeassistant.core",
     "homeassistant.config_entries",
     "homeassistant.const",
     "homeassistant.exceptions",
@@ -128,6 +131,11 @@ essential_modules = [
 for mod in essential_modules:
     if mod not in sys.modules:
         sys.modules[mod] = MagicMock()
+
+# homeassistant.core.callback should be a pass-through decorator
+core_mock = create_mock_module("homeassistant.core", {})
+core_mock.callback = lambda x: x
+
 
 
 @pytest.fixture
