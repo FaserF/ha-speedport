@@ -12,7 +12,7 @@ from custom_components.speedport.image import async_setup_entry
 @pytest.mark.asyncio
 async def test_image_setup(hass: HomeAssistant):
     """Test image entities creation and image retrieval."""
-    
+
     entry = MagicMock(entry_id="test_entry", title="Speedport")
     entry.data = {"host": "192.168.178.200"}
 
@@ -27,23 +27,23 @@ async def test_image_setup(hass: HomeAssistant):
     }
     # Success state for availability
     coordinator.last_update_success = True
-    
+
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {DATA_COORDINATOR: coordinator}
 
     async_add_entities = MagicMock()
-    
+
     # Run setup
     await async_setup_entry(hass, entry, async_add_entities)
 
     # The setup calls _async_add_new_entities once at the end
     assert async_add_entities.called
     images = async_add_entities.call_args[0][0]
-    
+
     assert len(images) == 2
-    
+
     main_image = next(img for img in images if img._wifi_type == "main")
     guest_image = next(img for img in images if img._wifi_type == "guest")
-    
+
     assert main_image.unique_id == "test_entry_wifi_qr_main"
     assert guest_image.unique_id == "test_entry_wifi_qr_guest"
     assert main_image.available is True

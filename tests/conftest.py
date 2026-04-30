@@ -27,7 +27,6 @@ class MockEntity:
     def __init__(self, *args, **kwargs):
         pass
 
-
     _attr_unique_id: str | None = None
     _attr_name: str | None = None
     _attr_available: bool = True
@@ -135,7 +134,6 @@ for mod in essential_modules:
 # homeassistant.core.callback should be a pass-through decorator
 core_mock = create_mock_module("homeassistant.core", {})
 core_mock.callback = lambda x: x
-
 
 
 @pytest.fixture

@@ -16,7 +16,6 @@ from homeassistant.util import dt as dt_util
 from .const import DATA_COORDINATOR, DOMAIN
 from .coordinator import SpeedportDataCoordinator
 
-
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -67,11 +66,11 @@ class SpeedportWifiQrImage(ImageEntity):
         self.coordinator = coordinator
         self._entry = entry
         self._wifi_type = wifi_type
-        
+
         name_suffix = "Main" if wifi_type == "main" else "Guest"
         self._attr_unique_id = f"{entry.entry_id}_wifi_qr_{wifi_type}"
         self._attr_name = f"Wi-Fi QR Code ({name_suffix})"
-        
+
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
         )
@@ -120,6 +119,7 @@ class SpeedportWifiQrImage(ImageEntity):
         # Generate QR code
         try:
             import segno
+
             qr = segno.make(qr_string)
             buf = io.BytesIO()
             qr.save(buf, kind="png", border=2, scale=10)
