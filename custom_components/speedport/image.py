@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import io
 import logging
-from typing import TYPE_CHECKING
 
 from homeassistant.components.image import ImageEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -16,9 +15,6 @@ from homeassistant.util import dt as dt_util
 
 from .const import DATA_COORDINATOR, DOMAIN
 from .coordinator import SpeedportDataCoordinator
-
-if TYPE_CHECKING:
-    pass
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,45 +30,23 @@ async def async_setup_entry(
         DATA_COORDINATOR
     ]
 
+    if not coordinator.data:
+        return
+
     _LOGGER.debug("Setting up Speedport image platform for %s", entry.title)
 
-    @callback
-    def _async_add_new_entities() -> None:
-        if not coordinator.data:
-            return
+    entities: list[ImageEntity] = []
 
-        new_entities: list[ImageEntity] = []
-        tracked_keys = {
-            entity.unique_id
-            for entity in hass.data[DOMAIN][entry.entry_id].get("image_entities", [])
-        }
+    # Main Wi-Fi QR Code
+    if coordinator.data.wlan_ssid:
+        entities.append(SpeedportWifiQrImage(hass, coordinator, entry, "main"))
 
-        # Main Wi-Fi QR Code
-        if coordinator.data.wlan_ssid:
-            unique_id = f"{entry.entry_id}_wifi_qr_main"
-            if unique_id not in tracked_keys:
-                tracked_keys.add(unique_id)
-                new_entities.append(
-                    SpeedportWifiQrImage(hass, coordinator, entry, "main")
-                )
+    # Guest Wi-Fi QR Code
+    if coordinator.data.wlan_guest_ssid:
+        entities.append(SpeedportWifiQrImage(hass, coordinator, entry, "guest"))
 
-        # Guest Wi-Fi QR Code
-        if coordinator.data.wlan_guest_ssid:
-            unique_id = f"{entry.entry_id}_wifi_qr_guest"
-            if unique_id not in tracked_keys:
-                tracked_keys.add(unique_id)
-                new_entities.append(
-                    SpeedportWifiQrImage(hass, coordinator, entry, "guest")
-                )
-
-        if new_entities:
-            async_add_entities(new_entities)
-            if "image_entities" not in hass.data[DOMAIN][entry.entry_id]:
-                hass.data[DOMAIN][entry.entry_id]["image_entities"] = []
-            hass.data[DOMAIN][entry.entry_id]["image_entities"].extend(new_entities)
-
-    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_entities))
-    _async_add_new_entities()
+    if entities:
+        async_add_entities(entities)
 
 
 class SpeedportWifiQrImage(ImageEntity):
@@ -93,11 +67,11 @@ class SpeedportWifiQrImage(ImageEntity):
         self.coordinator = coordinator
         self._entry = entry
         self._wifi_type = wifi_type
-
+        
         name_suffix = "Main" if wifi_type == "main" else "Guest"
         self._attr_unique_id = f"{entry.entry_id}_wifi_qr_{wifi_type}"
         self._attr_name = f"Wi-Fi QR Code ({name_suffix})"
-
+        
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
         )
@@ -144,9 +118,12 @@ class SpeedportWifiQrImage(ImageEntity):
         qr_string = f"WIFI:S:{ssid};T:{encryption_type};P:{key};H:{h};;"
 
         # Generate QR code
-        import segno
-
-        qr = segno.make(qr_string)
-        buf = io.BytesIO()
-        qr.save(buf, kind="png", border=2, scale=10)
-        return buf.getvalue()
+        try:
+            import segno
+            qr = segno.make(qr_string)
+            buf = io.BytesIO()
+            qr.save(buf, kind="png", border=2, scale=10)
+            return buf.getvalue()
+        except Exception as err:
+            _LOGGER.error("Failed to generate QR code: %s", err)
+            return None
