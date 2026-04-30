@@ -85,6 +85,7 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
 
     def _async_fire_events(self, data: SpeedportData) -> None:
         """Fire events for state changes."""
+        assert self.config_entry is not None
         if self.data is None:
             return
 
