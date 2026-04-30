@@ -44,7 +44,8 @@
   ],
   "requirements": [
     "pycryptodome==3.23.0",
-    "pytz==2026.1.post1"
+    "pytz==2026.1.post1",
+    "segno==1.6.1"
   ],
   "ssdp": [
     {

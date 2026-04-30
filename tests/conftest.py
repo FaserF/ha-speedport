@@ -96,6 +96,12 @@ create_mock_module(
     },
 )
 create_mock_module(
+    "homeassistant.components.image",
+    {
+        "ImageEntity": MockEntity,
+    },
+)
+create_mock_module(
     "homeassistant.helpers.update_coordinator",
     {
         "DataUpdateCoordinator": MockCoordinator,

@@ -43,6 +43,7 @@ Most Telekom Speedport routers are closed systems with limited external access. 
   - Toggle **Main WiFi** and **Guest WiFi** via switches.
   - View **SSIDs** for 2.4 GHz, 5 GHz, and Guest networks.
   - Trigger **WPS Pairing** via a button.
+  - Generate **Wi-Fi QR Codes** to easily share the main or guest network.
 - **Router Control**:
   - **Reboot** the router directly from HA.
   - Trigger an **Internet Reconnect** to get a new IP address.
@@ -101,6 +102,7 @@ The integration provides the following entities (depending on your router model)
 | **Button** | Reboot / Reconnect | Remote management controls. |
 | **Button** | WPS Pairing | Trigger WPS connection process. |
 | **Update** | Firmware Update | Monitor and install router updates. |
+| **Image** | Wi-Fi QR Code | Dynamically generated QR codes to join Wi-Fi. |
 | **Device Tracker** | [Device Name] | Presence tracking for all network clients. |
 
 ## 🧑‍💻 Development

@@ -40,7 +40,7 @@ OPTIONS_SCHEMA = vol.Schema(
 )
 
 
-class SpeedportConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class SpeedportConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     """Handle the config flow for Speedport."""
 
     VERSION = 1

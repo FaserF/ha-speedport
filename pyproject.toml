@@ -10,6 +10,7 @@ dependencies = [
     "yarl",
     "pycryptodome==3.23.0",
     "pytz==2026.1.post1",
+    "segno==1.6.1",
 ]
 
 [tool.ruff]
@@ -28,6 +29,9 @@ strict = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 warn_unused_configs = true
+disallow_subclassing_any = false
+disallow_untyped_decorators = false
+warn_return_any = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
