@@ -49,7 +49,11 @@ def main():
         if os.path.exists("docs"):
             docs_url = f"https://{owner}.github.io/{repo_name}/"
         else:
-            docs_url = f"https://github.com/{repo}" if repo else f"https://github.com/faserf/{repo_name}"
+            docs_url = (
+                f"https://github.com/{repo}"
+                if repo
+                else f"https://github.com/faserf/{repo_name}"
+            )
 
     # Calculate version via version_manager
     bump_args = [
@@ -64,11 +68,7 @@ def main():
     if version_override and version_override.strip():
         bump_args += ["--override", version_override.strip()]
 
-    version = (
-        subprocess.check_output(bump_args)
-        .decode("utf-8")
-        .strip()
-    )
+    version = subprocess.check_output(bump_args).decode("utf-8").strip()
 
     # Revert version bump change in manifest file (since versioning job only calculates it, sync-version actually writes it)
     run_git(["checkout", "--", manifest_path])
