@@ -1,80 +1,127 @@
-name: Report an issue
-description: Report an issue with the Speedport Integration
-title: "[Bug]: "
-labels: ["bug"]
+name: Bug Report
+description: Create a report to help us improve the Speedport integration
+title: '[Bug]: '
+labels: ['bug', 'triage']
 assignees:
   - FaserF
 body:
   - type: markdown
     attributes:
       value: |
-        This issue form is for reporting bugs only!
+        Thanks for taking the time to fill out this bug report!
 
-        If you have a feature or enhancement request, please use the feature request template!
-  - type: textarea
-    validations:
-      required: true
-    attributes:
-      label: The problem
-      description: >-
-        Describe the issue you are experiencing here.
-        Provide a clear and concise description of what the problem is.
-  - type: markdown
-    attributes:
-      value: |
-        ## Environment
+        Before submitting, please check:
+        - 📋 [Existing issues](https://github.com/FaserF/ha-speedport/issues)
+        - 📖 [Documentation](https://github.com/FaserF/ha-speedport/blob/master/README.md)
+        - 🔧 [Integration page](https://my.home-assistant.io/redirect/integration/?domain=speedport) in Home Assistant
+
   - type: input
     id: version
+    attributes:
+      label: Integration Version
+      description: Which version of this integration are you using?
+      placeholder: v1.0.0
     validations:
       required: true
+
+  - type: input
+    id: ha_version
     attributes:
-      label: What version of Home Assistant Core has the issue?
-      placeholder: core-
-      description: >
-        Can be found in: [Settings -> About](https://my.home-assistant.io/redirect/info/).
+      label: Home Assistant Version
+      description: |
+        Which version of Home Assistant Core are you running?
+        Can be found in: [Settings → About](https://my.home-assistant.io/redirect/info/).
 
         [![Open your Home Assistant instance and show your Home Assistant version information.](https://my.home-assistant.io/badges/info.svg)](https://my.home-assistant.io/redirect/info/)
+      placeholder: 2025.6.0
+    validations:
+      required: true
+
   - type: dropdown
-    validations:
-      required: true
+    id: ha_install_type
     attributes:
-      label: What type of installation are you running?
-      description: >
-        Can be found in: [Settings -> About](https://my.home-assistant.io/redirect/info/).
-
-        [![Open your Home Assistant instance and show your Home Assistant version information.](https://my.home-assistant.io/badges/info.svg)](https://my.home-assistant.io/redirect/info/)
+      label: Home Assistant Installation Type
+      description: |
+        Can be found in: [Settings → About](https://my.home-assistant.io/redirect/info/).
       options:
         - Home Assistant OS
         - Home Assistant Container
         - Home Assistant Supervised
         - Home Assistant Core
-  - type: input
-    id: version_integration
     validations:
       required: true
+
+  - type: input
+    id: router_model
     attributes:
-      label: What version of this Integration has the issue?
-      placeholder:
-      description: >
-        The version from the release page you are using. Latest version can be found here: https://github.com/FaserF/ha-speedport/releases/latest
-  - type: markdown
+      label: Router Model
+      description: What is the model of your Speedport router?
+      placeholder: e.g. Speedport Smart 4, Speedport W 724V
+    validations:
+      required: true
+
+  - type: input
+    id: router_firmware
     attributes:
-      value: |
-        # Details
+      label: Router Firmware Version
+      description: Which firmware version is running on your router? (found in router admin panel)
+      placeholder: e.g. 050137.03.03.001
+    validations:
+      required: false
+
   - type: textarea
+    id: description
     attributes:
-      label: Example YAML snippet
-      description: |
-        If applicable, please provide an example piece of YAML that can help reproduce this problem.
-        This can be from an automation, script, scene or configuration.
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: yaml_snippet
+    attributes:
+      label: Example YAML snippet (if applicable)
+      description: If applicable, paste relevant YAML from your configuration, automations, or scripts.
       render: yaml
+    validations:
+      required: false
+
   - type: textarea
+    id: diagnostics
     attributes:
-      label: Anything in the logs that might be useful for us?
-      description: For example, error message, or stack traces.
-      render: txt
+      label: Diagnostic Information
+      description: |
+        Please provide the diagnostic information for the integration.
+        You can download this from the [Integration page](https://my.home-assistant.io/redirect/integration/?domain=speedport) → ⋮ → Download diagnostics.
+      render: yaml
+    validations:
+      required: false
+
   - type: textarea
+    id: logs
     attributes:
-      label: Additional information
-      description: >
-        If you have any additional information for us, use the field below.
+      label: Relevant log output
+      description: Please copy and paste any relevant log output. Enable debug logging for this integration if possible.
+      render: shell
+    validations:
+      required: false
