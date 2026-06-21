@@ -60,57 +60,89 @@ def clean_and_update_template(file_path, integration_version, ha_version, repo_n
     
     original_content = content
     
-    # 1. Update Home Assistant Version placeholder
-    content = re.sub(
-        r"(id:\s*ha_version.*?placeholder:\s*['\"]?(?:e\.g\.\s*)?)20\d{2}\.\d{1,2}\.\d{1,2}(['\"]?)",
-        f"\\g<1>{ha_version}\\g<2>",
-        content,
-        flags=re.DOTALL
-    )
+    # Format the integration version cleanly (ensure single "v" prefix)
+    clean_ver = integration_version.lstrip("v")
+    target_ver = f"v{clean_ver}"
     
-    # 2. Update Integration Version placeholder to the new version (matches id: integration_version or id: version)
-    if not integration_version.startswith("v") and "." in integration_version:
-        integration_version = "v" + integration_version
-        
-    content = re.sub(
-        r"(id:\s*(?:integration_version|version).*?placeholder:\s*['\"]?(?:e\.g\.\s*)?v?)\d+\.\d+\.\d+[^'\"]*?(['\"]?)",
-        f"\\g<1>{integration_version}\\g<2>",
-        content,
-        flags=re.DOTALL
-    )
-
-    # 3. Update Service/Firmware Version placeholders dynamically if relevant
+    # Split by field block: a block starts with "  - type:"
+    blocks = re.split(r'(\s*-\s*type:)', content)
+    
     service_version = get_service_version(repo_name)
-    if service_version:
-        if repo_name == "ha-openwrt":
-            content = re.sub(
-                r"(id:\s*openwrt_version.*?placeholder:\s*['\"]?(?:e\.g\.\s*)?)\d+\.\d+\.\d+(['\"]?)",
-                f"\\g<1>{service_version}\\g<2>",
-                content,
-                flags=re.DOTALL
+    
+    for i in range(2, len(blocks), 2):
+        block_content = blocks[i]
+        
+        # Determine if this is a field block we want to update
+        field_id_match = re.search(r'id:\s*([a-zA-Z0-9_-]+)', block_content)
+        if not field_id_match:
+            continue
+        field_id = field_id_match.group(1)
+        
+        # 1. Integration version placeholder
+        if field_id in ("integration_version", "version"):
+            def repl_ver(match):
+                quote = match.group(1) or ""
+                prefix = match.group(2) or ""
+                return f"placeholder: {quote}{prefix}{target_ver}{quote}"
+            
+            new_block = re.sub(
+                r'placeholder:\s*(["\']?)(e\.g\.\s*)?[^\n"\']+\1',
+                repl_ver,
+                block_content
             )
-        elif repo_name == "hass-valetudo":
-            content = re.sub(
-                r"(id:\s*valetudo_version.*?placeholder:\s*['\"]?(?:e\.g\.\s*)?)\d+\.\d+\.\d+(['\"]?)",
-                f"\\g<1>{service_version}\\g<2>",
-                content,
-                flags=re.DOTALL
+            if new_block != block_content:
+                blocks[i] = new_block
+                block_content = new_block
+                
+        # 2. HA version placeholder
+        elif field_id == "ha_version":
+            def repl_ha(match):
+                quote = match.group(1) or ""
+                prefix = match.group(2) or ""
+                return f"placeholder: {quote}{prefix}{ha_version}{quote}"
+            
+            new_block = re.sub(
+                r'placeholder:\s*(["\']?)(e\.g\.\s*)?[^\n"\']+\1',
+                repl_ha,
+                block_content
             )
-        elif repo_name == "ha-NintendoSwitchCFW":
-            content = re.sub(
-                r"(id:\s*atmosphere_version.*?placeholder:\s*['\"]?(?:e\.g\.\s*Atmosphere\s*)?)\d+\.\d+\.\d+(['\"]?)",
-                f"\\g<1>{service_version}\\g<2>",
-                content,
-                flags=re.DOTALL
+            if new_block != block_content:
+                blocks[i] = new_block
+                block_content = new_block
+                
+        # 3. Service versions
+        elif service_version and (
+            (field_id == "openwrt_version" and repo_name == "ha-openwrt") or
+            (field_id == "valetudo_version" and repo_name == "hass-valetudo") or
+            (field_id == "atmosphere_version" and repo_name == "ha-NintendoSwitchCFW")
+        ):
+            def repl_service(match):
+                quote = match.group(1) or ""
+                prefix = match.group(2) or ""
+                atmosphere_prefix = match.group(3) or ""
+                return f"placeholder: {quote}{prefix}{atmosphere_prefix}{service_version}{quote}"
+            
+            new_block = re.sub(
+                r'placeholder:\s*(["\']?)(e\.g\.\s*)?(Atmosphere\s*)?[^\n"\']+\1',
+                repl_service,
+                block_content
             )
+            if new_block != block_content:
+                blocks[i] = new_block
+                block_content = new_block
+                
+        # 4. Make steps and expected optional
+        if field_id in ("steps", "expected", "steps_to_reproduce", "expected_behavior"):
+            new_block = re.sub(
+                r'required:\s*true',
+                'required: false',
+                block_content
+            )
+            if new_block != block_content:
+                blocks[i] = new_block
+                block_content = new_block
 
-    # 4. Make Expected Behavior (expected) and Steps to Reproduce (steps) optional
-    content = re.sub(
-        r"(id:\s*(?:steps|expected).*?required:\s*)true",
-        r"\g<1>false",
-        content,
-        flags=re.DOTALL
-    )
+    content = "".join(blocks)
 
     # 5. Privacy/Datenschutz Filter
     lines = content.splitlines()
