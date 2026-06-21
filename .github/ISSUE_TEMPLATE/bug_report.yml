@@ -1,5 +1,5 @@
 name: Report an issue
-description: Report an issue with the speedport Integration
+description: Report an issue with the Speedport Integration
 title: "[Bug]: "
 labels: ["bug"]
 assignees:
@@ -54,84 +54,9 @@ body:
       required: true
     attributes:
       label: What version of this Integration has the issue?
-      placeholder: 
+      placeholder:
       description: >
         The version from the release page you are using. Latest version can be found here: https://github.com/FaserF/ha-speedport/releases/latest
-  - type: input
-    id: station_name
-    validations:
-      required: false
-    attributes:
-      label: If possible, please provide the station name you were using.
-      placeholder: 
-      description: >
-        If you dont want to share this due to data privacy, please leave this field empty. You can also provide another station name where you can reproduce the issue.
-  - type: dropdown
-    id: data_source
-    validations:
-      required: true
-    attributes:
-      label: What data source are you using (usually IRIS-TTS)?
-      description: >
-        Please provide the data source you are using. Initially you had to choose one in the config flow data_source while setting up the integration.
-      options:
-        - IRIS-TTS  
-        - hafas=1  
-        - MVV  
-        - ÖBB  
-        - BSVG  
-        - DING  
-        - KVV  
-        - LinzAG  
-        - NVBW  
-        - NWL  
-        - VGN  
-        - VMV  
-        - VRN  
-        - VRR  
-        - VRR2  
-        - VRR3  
-        - VVO  
-        - VVS  
-        - bwegt  
-        - AVV  
-        - BART  
-        - BLS  
-        - BVG  
-        - CMTA  
-        - DSB  
-        - IE  
-        - KVB  
-        - NAHSH  
-        - NASA  
-        - NVV  
-        - RMV  
-        - RSAG  
-        - Resrobot  
-        - STV  
-        - SaarVV  
-        - TPG  
-        - VBB  
-        - VBN  
-        - VMT  
-        - VOS  
-        - ZVV  
-        - mobiliteit
-        - Other
-  - type: dropdown
-    id: server_type
-    validations:
-      required: false
-    attributes:
-      label: Which server are you using? (optional)
-      description: |
-        Please specify the server you are using for API requests.
-      options:
-        - "Official Server (dbf.finalrewind.org)"
-        - "FaserF Server (dbf.fabiseitz.de)"
-        - "Homeassistant App (Add-On) (local)"
-        - "custom (custom)"
-
   - type: markdown
     attributes:
       value: |
