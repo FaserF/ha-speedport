@@ -68,12 +68,12 @@ def clean_and_update_template(file_path, integration_version, ha_version, repo_n
         flags=re.DOTALL
     )
     
-    # 2. Update Integration Version placeholder to the new version
+    # 2. Update Integration Version placeholder to the new version (matches id: integration_version or id: version)
     if not integration_version.startswith("v") and "." in integration_version:
         integration_version = "v" + integration_version
         
     content = re.sub(
-        r"(id:\s*integration_version.*?placeholder:\s*['\"]?(?:e\.g\.\s*)?)v?\d+\.\d+\.\d+[^'\"]*?(['\"]?)",
+        r"(id:\s*(?:integration_version|version).*?placeholder:\s*['\"]?(?:e\.g\.\s*)?v?)\d+\.\d+\.\d+[^'\"]*?(['\"]?)",
         f"\\g<1>{integration_version}\\g<2>",
         content,
         flags=re.DOTALL
@@ -104,7 +104,15 @@ def clean_and_update_template(file_path, integration_version, ha_version, repo_n
                 flags=re.DOTALL
             )
 
-    # 4. Privacy/Datenschutz Filter
+    # 4. Make Expected Behavior (expected) and Steps to Reproduce (steps) optional
+    content = re.sub(
+        r"(id:\s*(?:steps|expected).*?required:\s*)true",
+        r"\g<1>false",
+        content,
+        flags=re.DOTALL
+    )
+
+    # 5. Privacy/Datenschutz Filter
     lines = content.splitlines()
     new_lines = []
     skip_mode = False

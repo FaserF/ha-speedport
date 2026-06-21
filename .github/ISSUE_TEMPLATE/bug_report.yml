@@ -20,7 +20,7 @@ body:
     attributes:
       label: Integration Version
       description: Which version of this integration are you using?
-      placeholder: v1.0.0
+      placeholder: vv1.1.1
     validations:
       required: true
 
@@ -87,7 +87,7 @@ body:
         2. Click on '....'
         3. See error
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: expected
@@ -95,7 +95,7 @@ body:
       label: Expected Behavior
       description: A clear and concise description of what you expected to happen.
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: yaml_snippet
