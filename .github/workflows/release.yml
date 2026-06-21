@@ -1,73 +1,268 @@
+---
 name: Release
-on:
+
+"on":
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release Type'
+        description: "Type of release (stable, beta, nightly)"
         required: true
+        default: "beta"
         type: choice
-        options: [stable, beta, nightly]
+        options:
+          - stable
+          - beta
+          - nightly
       bump_level:
-        description: 'Bump Level (for stable/beta)'
-        required: true
+        description: "Bump Level (SemVer only: major, minor, patch)"
+        required: false
+        default: "patch"
         type: choice
-        default: patch
-        options: [major, minor, patch]
+        options:
+          - patch
+          - minor
+          - major
+      version_override:
+        description: "Manually override new version (e.g. 1.2.3 or 2026.6.2b1). Leave empty to use automatic calculation."
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-release
+  cancel-in-progress: true
+
 jobs:
-  release:
+  versioning:
+    name: Determine Version
     runs-on: ubuntu-latest
-    permissions: {contents: write, packages: write}
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      tag: ${{ steps.get_version.outputs.tag }}
+      is_prerelease: ${{ steps.get_version.outputs.is_prerelease }}
+      release_body: ${{ steps.get_version.outputs.release_body }}
     steps:
-      - uses: actions/checkout@v7.0.0
-        with: {fetch-depth: 0}
-      - name: Set up Python
-        uses: actions/setup-python@v6.2.0
-        with: {python-version: '3.14.6'}
-      - name: Calculate Version
-        id: version
-        run: |
-          NEW_VERSION=$(python .github/scripts/version_manager.py bump --type ${{ inputs.release_type }} --level ${{ inputs.bump_level }})
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-      - name: Create Release Tag
-        if: inputs.release_type != 'nightly'
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git commit -am "chore(release): bump version to ${{ steps.version.outputs.version }}"
-          git tag v${{ steps.version.outputs.version }}
-          git push origin v${{ steps.version.outputs.version }}
-          git push origin main
-      - name: Find Previous Tag
-        id: pre_tag
-        run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
-      - name: Generate Changelog
-        if: inputs.release_type != 'nightly'
-        run: |
-          python .github/scripts/changelog_builder.py --from-tag "${{ steps.pre_tag.outputs.tag }}" --repo-url "https://github.com/${{ github.repository }}" --output "CHANGELOG_BODY.md"
-      - name: Zip Component
-        id: zip
-        if: inputs.release_type != 'nightly'
-        run: |
-          DOMAIN=$(basename $(ls -d custom_components/*/ | grep -v "__pycache__" | head -n 1))
-          echo "Found domain: $DOMAIN"
-          echo "DOMAIN=$DOMAIN" >> $GITHUB_ENV
-          cd custom_components
-          zip -r ../$DOMAIN.zip $DOMAIN
-          cd ..
-      - name: Create Release Notes
-        uses: softprops/action-gh-release@v3.0.1
-        if: inputs.release_type != 'nightly'
+      - uses: actions/checkout@v7
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: Release ${{ steps.version.outputs.version }}
-          body_path: CHANGELOG_BODY.md
-          prerelease: ${{ inputs.release_type == 'beta' }}
-          files: ${{ env.DOMAIN }}.zip
-      - name: Post-Release Dev Bump
-        if: inputs.release_type != 'nightly'
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Calculate Version and Release Details
+        id: get_version
+        shell: bash
+        env:
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          BUMP_LEVEL: ${{ inputs.bump_level }}
+          VERSION_OVERRIDE: ${{ inputs.version_override }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
         run: |
-          NEW_DEV=$(python .github/scripts/version_manager.py bump --type dev)
-          git commit -am "chore(dev): bump to $NEW_DEV"
-          git push origin main
+          python .github/scripts/calculate_release_details.py
+
+      - name: Upload Release Body
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-body
+          path: release_body.md
+
+      - name: Prepare Initial Draft Body
+        shell: bash
+        run: |
+          cp release_body.md initial_draft_body.md
+
+      - name: Check and Delete Existing Draft Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.get_version.outputs.tag }}
+          VERSION: ${{ steps.get_version.outputs.version }}
+        shell: bash
+        run: |
+          # Use gh api to find existing draft release
+          release_id=$(gh api "repos/$REPO/releases" --jq '.[] | select(.tag_name=="'$TAG'" or .name=="Release '$VERSION'") | select(.draft==true) | .id')
+          if [ -n "$release_id" ]; then
+            gh api -X DELETE "repos/$REPO/releases/$release_id"
+            git push --delete origin "$TAG" 2>/dev/null || true
+          fi
+
+      - name: Create Initial Draft Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.get_version.outputs.tag }}
+          VERSION: ${{ steps.get_version.outputs.version }}
+          IS_PRERELEASE: ${{ steps.get_version.outputs.is_prerelease }}
+        shell: bash
+        run: |
+          prerelease_arg=""
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            prerelease_arg="--prerelease"
+          fi
+          gh release create "$TAG" \
+            --title "Release $VERSION" \
+            --notes-file "initial_draft_body.md" \
+            --draft \
+            $prerelease_arg
+
+  sync-version:
+    name: Sync Repository Version
+    needs: versioning
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Configure Git and pull latest
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin ${{ github.ref_name }}
+
+      - name: Update Files
+        shell: bash
+        run: |
+          python .github/scripts/version_manager.py bump --type ${{ inputs.release_type }} --level ${{ inputs.bump_level }} --override "${{ inputs.version_override }}"
+
+      - name: Commit and Push
+        run: |
+          git add custom_components/speedport/manifest.json
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: release version ${{ needs.versioning.outputs.version }} [skip ci]"
+            git push origin HEAD:${{ github.ref_name }} || (git pull --rebase origin ${{ github.ref_name }} && git push origin HEAD:${{ github.ref_name }})
+          fi
+
+      - name: Download Release Body
+        uses: actions/download-artifact@v8
+        with:
+          name: release-body
+
+      - name: Update Draft Status (Zipping Integration)
+        shell: bash
+        run: |
+          cp release_body.md updated_draft_body.md
+
+      - name: Update Draft Release on GitHub
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.versioning.outputs.tag }}
+          VERSION: ${{ needs.versioning.outputs.version }}
+          IS_PRERELEASE: ${{ needs.versioning.outputs.is_prerelease }}
+        shell: bash
+        run: |
+          release_id=$(gh api "repos/$REPO/releases" --jq '.[] | select(.tag_name=="'$TAG'" or .name=="Release '$VERSION'") | select(.draft==true) | .id')
+          if [ -n "$release_id" ]; then
+            gh api -X PATCH "repos/$REPO/releases/$release_id" \
+              -f tag_name="$TAG" \
+              -f name="Release $VERSION" \
+              -f body_path="updated_draft_body.md" \
+              -F draft=true \
+              -F prerelease=$( [ "$IS_PRERELEASE" = "true" ] && echo "true" || echo "false" )
+          fi
+
+  gh-release:
+    needs: [versioning, sync-version]
+    if: always() && needs.versioning.result == 'success' && needs.sync-version.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: 📦 Zip Component
+        run: |
+          cd custom_components
+          zip -r ../speedport.zip speedport
+          cd ..
+
+      - name: Download Release Body Artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: release-body
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.versioning.outputs.tag }}
+          VERSION: ${{ needs.versioning.outputs.version }}
+          IS_PRERELEASE: ${{ needs.versioning.outputs.is_prerelease }}
+        shell: bash
+        run: |
+          # Find existing draft release
+          release_id=$(gh api "repos/$REPO/releases" --jq '.[] | select(.tag_name=="'$TAG'" or .name=="Release '$VERSION'") | select(.draft==true) | .id')
+          
+          # Set prerelease argument
+          prerelease_arg=""
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            prerelease_arg="--prerelease"
+          fi
+          
+          if [ -n "$release_id" ]; then
+            # Update the existing draft release to publish it
+            gh api -X PATCH "repos/$REPO/releases/$release_id" \
+              -f tag_name="$TAG" \
+              -f name="Release $VERSION" \
+              -f body_path="release_body.md" \
+              -F draft=false \
+              -F prerelease=$( [ "$IS_PRERELEASE" = "true" ] && echo "true" || echo "false" )
+              
+            # Upload the assets to the published release
+            gh release upload "$TAG" speedport.zip --clobber
+          else
+            # Create a brand new release if no draft exists
+            gh release create "$TAG" \
+              --title "Release $VERSION" \
+              --notes-file "release_body.md" \
+              $prerelease_arg \
+              speedport.zip
+          fi
+ 
+      - name: Post-Release Dev Bump
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin ${{ github.ref_name }}
+          NEW_DEV=$(python .github/scripts/version_manager.py bump --type dev --level patch)
+          if ! git diff --quiet; then
+            git commit -am "chore(dev): bump to $NEW_DEV [skip ci]"
+            git push origin HEAD:${{ github.ref_name }} || (git pull --rebase origin ${{ github.ref_name }} && git push origin HEAD:${{ github.ref_name }})
+          fi
+
+  cleanup-release:
+    needs: [versioning, sync-version, gh-release]
+    if: always() && needs.versioning.result == 'success' && (needs.sync-version.result == 'failure' || needs.gh-release.result == 'failure' || cancelled())
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete Draft Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.versioning.outputs.tag }}
+        shell: bash
+        run: |
+          release_id=$(gh api "repos/$REPO/releases" --jq '.[] | select(.tag_name=="'$TAG'") | select(.draft==true) | .id')
+          if [ -n "$release_id" ]; then
+            gh api -X DELETE "repos/$REPO/releases/$release_id"
+            gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          fi

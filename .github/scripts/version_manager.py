@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import glob
 import json
 import os
@@ -11,7 +12,12 @@ def find_manifest():
     return matches[0] if matches else None
 
 
-def get_current_version(manifest_path):
+MANIFEST_FILE = find_manifest()
+
+
+def get_current_version(manifest_path=None):
+    if manifest_path is None:
+        manifest_path = MANIFEST_FILE
     try:
         tags = (
             subprocess.check_output(["git", "tag"], stderr=subprocess.DEVNULL)
@@ -38,87 +44,135 @@ def get_current_version(manifest_path):
                 )
         if v_tags:
             return sorted(v_tags, key=lambda x: x["key"], reverse=True)[0]["tag"]
-    except subprocess.CalledProcessError, IndexError, ValueError:
+    except (subprocess.CalledProcessError, IndexError, ValueError):
         pass
     if manifest_path and os.path.exists(manifest_path):
-        with open(manifest_path) as f:
+        with open(manifest_path, "r", encoding="utf-8") as f:
             return json.load(f).get("version", "1.0.0")
     return "1.0.0"
 
 
-def write_version(v, manifest_path):
+def write_version(v, manifest_path=None):
+    if manifest_path is None:
+        manifest_path = MANIFEST_FILE
     if manifest_path and os.path.exists(manifest_path):
-        with open(manifest_path) as f:
+        with open(manifest_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         data["version"] = v
-        with open(manifest_path, "w") as f:
+        with open(manifest_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
             f.write("\n")
-    # Update pyproject.toml if it exists
     if os.path.exists("pyproject.toml"):
-        with open("pyproject.toml") as f:
+        with open("pyproject.toml", "r", encoding="utf-8") as f:
             content = f.read()
         content = re.sub(
             r'^version\s*=\s*".*?"', f'version = "{v}"', content, flags=re.MULTILINE
         )
-        with open("pyproject.toml", "w") as f:
+        with open("pyproject.toml", "w", encoding="utf-8") as f:
             f.write(content)
 
 
-def calculate_version(rtype, level, curr):
+def calculate_version(rtype, level="patch", curr=None, now=None, override=None):
+    if override:
+        # Strip leading 'v' if present to normalize
+        if override.lower().startswith("v"):
+            override = override[1:]
+        return override
+
+    if now is None:
+        now = datetime.datetime.now()
+    if curr is None:
+        curr = get_current_version(MANIFEST_FILE)
+
     match = re.match(r"^v?(\d+)\.(\d+)\.(\d+)(?:(b)(\d+)|(-dev)(\d+))?$", curr)
     if not match:
-        # Fallback for old CalVer or invalid versions
-        return "1.5.0"
+        return "1.0.0"
 
-    major, minor, patch, b_p, b_n, d_p, d_n = match.groups()
-    major, minor, patch = int(major), int(minor), int(patch)
+    v1_str, v2_str, v3_str, b_p, b_n, d_p, d_n = match.groups()
+    v1, v2, v3 = int(v1_str), int(v2_str), int(v3_str)
     stype, snum = ("b", int(b_n)) if b_p else (("-dev", int(d_n)) if d_p else (None, 0))
 
-    if rtype == "stable":
-        if stype:  # Current is a pre-release (beta/dev), make it stable
-            return f"{major}.{minor}.{patch}"
-        # Current is stable, bump according to level
-        if level == "major":
-            return f"{major + 1}.0.0"
-        if level == "minor":
-            return f"{major}.{minor + 1}.0"
-        return f"{major}.{minor}.{patch + 1}"
+    # Detect scheme based on major version (e.g. 2026 is CalVer, 1 or 2 is SemVer)
+    is_calver = v1 >= 2020
 
-    if rtype == "beta":
-        if stype == "b":
-            return f"{major}.{minor}.{patch}b{snum + 1}"
-        # Bump core to target level and start beta
-        if level == "major":
-            return f"{major + 1}.0.0b0"
-        if level == "minor":
-            return f"{major}.{minor + 1}.0b0"
-        return f"{major}.{minor}.{patch + 1}b0"
+    if is_calver:
+        # CalVer Bumping Logic (Year.Month.Patch)
+        year, month = now.year, now.month
+        new_cyc = (year != v1) or (month != v2)
+        p = 0 if new_cyc else v3
 
-    if rtype in ["dev", "nightly"]:
-        if stype == "-dev":
-            return f"{major}.{minor}.{patch}-dev{snum + 1}"
-        # Bump core and start dev
-        if level == "major":
-            return f"{major + 1}.0.0-dev0"
-        if level == "minor":
-            return f"{major}.{minor + 1}.0-dev0"
-        return f"{major}.{minor}.{patch + 1}-dev0"
+        if rtype == "stable":
+            if stype:
+                return f"{year}.{month}.{p}"
+            return f"{year}.{month}.0" if new_cyc else f"{year}.{month}.{p + 1}"
+        if rtype == "beta":
+            if new_cyc:
+                return f"{year}.{month}.0b0"
+            if stype == "b":
+                return f"{year}.{month}.{p}b{snum + 1}"
+            if stype == "-dev":
+                return f"{year}.{month}.{p}b0"
+            return f"{year}.{month}.{p + 1}b0"
+        if rtype in ["dev", "nightly"]:
+            if new_cyc:
+                return f"{year}.{month}.0-dev0"
+            if stype == "-dev":
+                return f"{year}.{month}.{p}-dev{snum + 1}"
+            return f"{year}.{month}.{p + 1}-dev0"
+    else:
+        # SemVer Bumping Logic (Major.Minor.Patch)
+        if rtype == "stable":
+            if stype:
+                return f"{v1}.{v2}.{v3}"
+            if level == "major":
+                return f"{v1 + 1}.0.0"
+            if level == "minor":
+                return f"{v1}.{v2 + 1}.0"
+            return f"{v1}.{v2}.{v3 + 1}"
+        if rtype == "beta":
+            if stype == "b":
+                return f"{v1}.{v2}.{v3}b{snum + 1}"
+            if level == "major":
+                return f"{v1 + 1}.0.0b0"
+            if level == "minor":
+                return f"{v1}.{v2 + 1}.0b0"
+            return f"{v1}.{v2}.{v3 + 1}b0"
+        if rtype in ["dev", "nightly"]:
+            if stype == "-dev":
+                return f"{v1}.{v2}.{v3}-dev{snum + 1}"
+            if level == "major":
+                return f"{v1 + 1}.0.0-dev0"
+            if level == "minor":
+                return f"{v1}.{v2 + 1}.0-dev0"
+            return f"{v1}.{v2}.{v3 + 1}-dev0"
 
-    raise ValueError(f"Unknown type: {rtype}")
+    return curr
+
+
+def main():
+    p = argparse.ArgumentParser()
+    subparsers = p.add_subparsers(dest="command")
+
+    bump_parser = subparsers.add_parser("bump")
+    bump_parser.add_argument(
+        "--type", choices=["stable", "beta", "dev", "nightly"], required=True
+    )
+    bump_parser.add_argument(
+        "--level", choices=["major", "minor", "patch"], default="patch"
+    )
+    bump_parser.add_argument("--override", default=None)
+
+    args = p.parse_args()
+
+    if args.command == "bump":
+        # Handle empty string override values from workflow inputs
+        override_val = (
+            args.override if args.override and args.override.strip() else None
+        )
+        new_v = calculate_version(args.type, args.level, override=override_val)
+        write_version(new_v)
+        print(new_v)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["get", "bump"])
-    parser.add_argument("--type", choices=["stable", "beta", "nightly", "dev"])
-    parser.add_argument("--level", choices=["major", "minor", "patch"], default="patch")
-    parser.add_argument("--manifest", default=None)
-    args = parser.parse_args()
-    m_path = args.manifest or find_manifest()
-    if args.action == "get":
-        print(get_current_version(m_path))
-    elif args.action == "bump":
-        v = calculate_version(args.type, args.level, get_current_version(m_path))
-        write_version(v, m_path)
-        print(v)
+    main()

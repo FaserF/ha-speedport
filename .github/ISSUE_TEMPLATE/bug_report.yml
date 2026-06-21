@@ -1,47 +1,80 @@
-name: Bug Report
-description: Create a report to help us improve the Speedport integration
-title: '[Bug]: '
-labels: ['bug', 'triage']
+name: Report an issue
+description: Report an issue with the Speedport Integration
+title: "[Bug]: "
+labels: ["bug"]
+assignees:
+  - FaserF
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to fill out this bug report!
+        This issue form is for reporting bugs only!
+
+        If you have a feature or enhancement request, please use the feature request template!
+  - type: textarea
+    validations:
+      required: true
+    attributes:
+      label: The problem
+      description: >-
+        Describe the issue you are experiencing here.
+        Provide a clear and concise description of what the problem is.
+  - type: markdown
+    attributes:
+      value: |
+        ## Environment
   - type: input
     id: version
-    attributes:
-      label: Integration Version
-      description: Which version of this integration are you using?
-      placeholder: v1.0.0
     validations:
       required: true
-  - type: input
-    id: router_model
     attributes:
-      label: Router Model
-      description: Which Speedport model are you using? (e.g., Speedport Smart 4, Speedport Pro Plus)
-      placeholder: Speedport Smart 4
-    validations:
-      required: true
-  - type: input
-    id: firmware_version
-    attributes:
-      label: Firmware Version
-      description: What is the firmware version of your router?
-      placeholder: 010137.5.0.001.0
-    validations:
-      required: false
-  - type: textarea
-    id: description
-    attributes:
-      label: Describe the bug
-      description: A clear and concise description of what the bug is.
-    validations:
-      required: true
-  - type: textarea
-    id: logs
-    attributes:
-      label: Relevant log output
-      description: Please copy and paste any relevant log output. Use the integration's debug logging if possible.
-      render: shell
+      label: What version of Home Assistant Core has the issue?
+      placeholder: core-
+      description: >
+        Can be found in: [Settings -> About](https://my.home-assistant.io/redirect/info/).
 
+        [![Open your Home Assistant instance and show your Home Assistant version information.](https://my.home-assistant.io/badges/info.svg)](https://my.home-assistant.io/redirect/info/)
+  - type: dropdown
+    validations:
+      required: true
+    attributes:
+      label: What type of installation are you running?
+      description: >
+        Can be found in: [Settings -> About](https://my.home-assistant.io/redirect/info/).
+
+        [![Open your Home Assistant instance and show your Home Assistant version information.](https://my.home-assistant.io/badges/info.svg)](https://my.home-assistant.io/redirect/info/)
+      options:
+        - Home Assistant OS
+        - Home Assistant Container
+        - Home Assistant Supervised
+        - Home Assistant Core
+  - type: input
+    id: version_integration
+    validations:
+      required: true
+    attributes:
+      label: What version of this Integration has the issue?
+      placeholder:
+      description: >
+        The version from the release page you are using. Latest version can be found here: https://github.com/FaserF/ha-speedport/releases/latest
+  - type: markdown
+    attributes:
+      value: |
+        # Details
+  - type: textarea
+    attributes:
+      label: Example YAML snippet
+      description: |
+        If applicable, please provide an example piece of YAML that can help reproduce this problem.
+        This can be from an automation, script, scene or configuration.
+      render: yaml
+  - type: textarea
+    attributes:
+      label: Anything in the logs that might be useful for us?
+      description: For example, error message, or stack traces.
+      render: txt
+  - type: textarea
+    attributes:
+      label: Additional information
+      description: >
+        If you have any additional information for us, use the field below.
