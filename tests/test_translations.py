@@ -5,8 +5,10 @@ from pathlib import Path
 
 import pytest
 
-INTEGRATION_DIR = (
-    Path(__file__).resolve().parent.parent / "custom_components" / "speedport"
+INTEGRATION_DIR = next(
+    p
+    for p in (Path(__file__).resolve().parent.parent / "custom_components").iterdir()
+    if p.is_dir() and p.name != "__pycache__"
 )
 STRINGS_FILE = INTEGRATION_DIR / "strings.json"
 TRANSLATIONS_DIR = INTEGRATION_DIR / "translations"
