@@ -218,7 +218,14 @@ def clean_and_update_template(file_path, integration_version, ha_version, repo_n
             if (
                 any(
                     k in desc_lower
-                    for k in ["domain", "host", "ip address", "url", "instance", "address"]
+                    for k in [
+                        "domain",
+                        "host",
+                        "ip address",
+                        "url",
+                        "instance",
+                        "address",
+                    ]
                 )
                 and "not share" not in desc_lower
                 and "private" not in desc_lower
