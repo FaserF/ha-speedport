@@ -12,3 +12,4 @@ voluptuous
 yarl
 aioresponses
 homeassistant
+pycryptodome
