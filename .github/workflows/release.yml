@@ -214,7 +214,8 @@ jobs:
 
       - name: 📦 Zip Component
         run: |
-          zip -r speedport.zip custom_components/speedport
+          cd custom_components/speedport
+          zip -r ../../speedport.zip .
 
       - name: Download Release Body Artifact
         uses: actions/download-artifact@v8
