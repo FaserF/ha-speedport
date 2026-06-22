@@ -13,3 +13,4 @@ yarl
 aioresponses
 homeassistant
 pycryptodome
+segno
