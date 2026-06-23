@@ -322,7 +322,7 @@ class SpeedportClient:
         """Default request kwargs with browser-like headers."""
         return {
             "ssl": False,
-            "timeout": aiohttp.ClientTimeout(total=30),
+            "timeout": aiohttp.ClientTimeout(total=10),
             "headers": {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
                 "Accept": "application/json, text/javascript, */*; q=0.01",
