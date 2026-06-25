@@ -46,9 +46,14 @@ Most Telekom Speedport routers are closed systems with limited external access. 
 | :--- | :--- | :--- |
 | **Speedport W 724V** | ✅ **Tested** | Primary development model. |
 | **Speedport Smart 4R Typ A** | ✅ **Tested** | Confirmed working by user ([#10](https://github.com/FaserF/ha-speedport/issues/10)). |
-| Speedport Smart 3 / 4 | ⚠️ Theoretical | Should work via encrypted API, but untested. |
+| **Speedport Smart 4 Typ B** | ✅ **Tested** | Confirmed working by user ([#23](https://github.com/FaserF/ha-speedport/issues/23)). |
+| Speedport Smart 1 / 2 / 3 / 4 | ⚠️ Theoretical | Should work via encrypted API, but untested. |
+| Speedport Smart 3 / 4 (other types) | ⚠️ Theoretical | Should work via encrypted/plain API, but untested. |
 | Speedport Pro / Pro Plus | ⚠️ Theoretical | Should work via encrypted API, but untested. |
-| Other W / Neo models | ⚠️ Theoretical | Basic sensors should work. |
+| Speedport Hybrid / Hybrid 2 | ⚠️ Theoretical | Should work via native web API, but untested. |
+| Speedport Entry / Entry 2 / Entry 21 | ⚠️ Theoretical | Basic sensors should work, untested. |
+| Speedport Neo | ⚠️ Theoretical | Basic sensors should work, untested. |
+| Speedport W 723V / W 921V / W 922V | ⚠️ Theoretical | Basic sensors should work, untested. |
 
 ## ✨ Features
 

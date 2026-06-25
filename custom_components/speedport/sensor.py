@@ -331,7 +331,5 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
                 ]
             }
         if self.entity_description.key == "calls":
-            return {
-                "calls": data.calls
-            }
+            return {"calls": data.calls}
         return {}

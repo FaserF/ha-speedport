@@ -38,7 +38,5 @@ async def test_sensor_setup(hass: HomeAssistant):
     )
     assert router_state_sensor.unique_id == "test_entry_router_state"
 
-    calls_sensor = next(
-        s for s in sensors if s.entity_description.key == "calls"
-    )
+    calls_sensor = next(s for s in sensors if s.entity_description.key == "calls")
     assert calls_sensor.unique_id == "test_entry_calls"

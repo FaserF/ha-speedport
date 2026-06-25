@@ -102,7 +102,7 @@ def test_config_keys_in_strings():
         strings_data = json.load(f)
 
     # Extract all possible data keys from strings.json (under step and options)
-    all_data_keys = set()
+    all_data_keys: set[str] = set()
 
     def extract_data_keys(data, path=""):
         if isinstance(data, dict):

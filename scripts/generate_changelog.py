@@ -5,6 +5,7 @@ import argparse
 import re
 import subprocess
 import sys
+from typing import Any
 
 # Noise filter — commits matching ANY pattern are silently dropped
 NOISE_PATTERNS = [
@@ -121,7 +122,7 @@ def get_norm_key(msg: str) -> str:
 
 
 def get_formatted_item(
-    display: str, hashes: list, repo: str, commit_authors: dict
+    display: str, hashes: list[str], repo: str, commit_authors: dict[str, str]
 ) -> str:
     if hashes:
         links = []
@@ -177,15 +178,15 @@ def main():
         raw_output = ""
 
     commit_lines = [line.strip() for line in raw_output.splitlines() if line.strip()]
-    commit_authors = {}
+    commit_authors: dict[str, str] = {}
 
     try:
         total_raw = int(total_commits) if total_commits else len(commit_lines)
     except ValueError:
         total_raw = len(commit_lines)
 
-    buckets = {k: [] for k in CATEGORY_ORDER}
-    seen_items = {}
+    buckets: dict[str, list[Any]] = {k: [] for k in CATEGORY_ORDER}
+    seen_items: dict[str, Any] = {}
 
     for line in commit_lines:
         author = ""
@@ -215,7 +216,7 @@ def main():
         if any(re.search(p, msg) for p in NOISE_PATTERNS):
             continue
 
-        bucket = "other"
+        bucket: str = "other"
         display = msg
         is_break = False
 
@@ -362,36 +363,42 @@ def main():
     for key in CATEGORY_ORDER:
         if key == "breaking":
             continue
-        bucket = buckets[key]
-        if not bucket:
+        bucket_items = buckets[key]
+        if not bucket_items:
             continue
         has_any = True
 
         out.append(f"### {CATEGORY_EMOJI[key]}")
         out.append("")
 
-        collapse = (len(bucket) > MAX_PER_SECTION) and (key not in NEVER_COLLAPSE)
+        collapse = (len(bucket_items) > MAX_PER_SECTION) and (key not in NEVER_COLLAPSE)
 
         if collapse:
             for i in range(MAX_PER_SECTION):
                 formatted = get_formatted_item(
-                    bucket[i]["display"], bucket[i]["hashes"], repo, commit_authors
+                    bucket_items[i]["display"],
+                    bucket_items[i]["hashes"],
+                    repo,
+                    commit_authors,
                 )
                 out.append(f"- {formatted}")
-            remaining = len(bucket) - MAX_PER_SECTION
+            remaining = len(bucket_items) - MAX_PER_SECTION
             out.append("")
             out.append("<details>")
             out.append(f"<summary>Show {remaining} more changes…</summary>")
             out.append("")
-            for i in range(MAX_PER_SECTION, len(bucket)):
+            for i in range(MAX_PER_SECTION, len(bucket_items)):
                 formatted = get_formatted_item(
-                    bucket[i]["display"], bucket[i]["hashes"], repo, commit_authors
+                    bucket_items[i]["display"],
+                    bucket_items[i]["hashes"],
+                    repo,
+                    commit_authors,
                 )
                 out.append(f"- {formatted}")
             out.append("")
             out.append("</details>")
         else:
-            for item in bucket:
+            for item in bucket_items:
                 formatted = get_formatted_item(
                     item["display"], item["hashes"], repo, commit_authors
                 )
@@ -415,7 +422,7 @@ def main():
     else:
         out.append(f"*Changelog generated from `{range_str}`.*")
 
-    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     print("\n".join(out))
 
 

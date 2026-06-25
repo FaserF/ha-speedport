@@ -696,8 +696,20 @@ class SpeedportClient:
                 ip_data = await self._get_json(
                     "data/IPData.json",
                     referer="html/content/internet/con_ipdata.html",
-                    auth=True,
+                    auth=False,
                 )
+                if not ip_data or not ip_data.get("public_ip_v4"):
+                    # Fallback to auth=True if it is empty/failed
+                    try:
+                        ip_data_auth = await self._get_json(
+                            "data/IPData.json",
+                            referer="html/content/internet/con_ipdata.html",
+                            auth=True,
+                        )
+                        if ip_data_auth:
+                            ip_data.update(ip_data_auth)
+                    except Exception:
+                        pass
                 raw.update(ip_data)
 
                 try:
