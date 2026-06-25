@@ -526,6 +526,9 @@ class SpeedportClient:
                         "Successfully logged in (SHA256 mode) to %s", self._host
                     )
                     return
+        except SpeedportConnectionError:
+            # Re-raise connection error immediately to fail fast when host is unreachable
+            raise
         except Exception as exc:
             _LOGGER.debug(
                 "Modern login attempt failed, falling back to legacy: %s", exc
@@ -581,6 +584,9 @@ class SpeedportClient:
                             "Successfully logged in (Legacy mode) to %s", self._host
                         )
                         return
+            except aiohttp.ClientError as exc:
+                # If we get a connection error, do not loop over other bodies
+                raise SpeedportConnectionError(f"Login request failed: {exc}") from exc
             except Exception as exc:
                 _LOGGER.debug("Login method failed: %s", exc)
 
