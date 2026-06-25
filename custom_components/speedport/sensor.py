@@ -184,6 +184,13 @@ SENSORS: tuple[SpeedportSensorEntityDescription, ...] = (
         icon="mdi:signal-4g",
         data_key="ex5g_freq_lte",
     ),
+    SpeedportSensorEntityDescription(
+        key="calls",
+        translation_key="calls",
+        name="Call List",
+        icon="mdi:phone-log",
+        data_key="calls",
+    ),
 )
 
 
@@ -263,6 +270,9 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
         if key == "_connected_devices_count":
             return len(data.devices)
 
+        if key == "calls":
+            return len(data.calls)
+
         # Try direct attribute first
         val = getattr(data, key, None)
         if val is None:
@@ -319,5 +329,9 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
                     for d in data.devices
                     if d.connected
                 ]
+            }
+        if self.entity_description.key == "calls":
+            return {
+                "calls": data.calls
             }
         return {}

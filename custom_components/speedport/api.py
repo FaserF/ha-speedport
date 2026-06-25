@@ -232,6 +232,9 @@ class SpeedportData:
     # Connected devices
     devices: list[WlanDevice] = field(default_factory=list)
 
+    # Telephony calls
+    calls: list[dict[str, Any]] = field(default_factory=list)
+
     # Update information
     update_available: bool = False
     latest_version: str | None = None
@@ -374,7 +377,7 @@ class SpeedportClient:
         headers["X-Requested-With"] = "XMLHttpRequest"
 
         # For legacy models like W 724V, Referer MUST be the login page for data endpoints
-        if path.startswith("data/") or not referer:
+        if not referer:
             referer = "html/login/index.html"
 
         ref_url = f"{self._base_url}/{referer}"
@@ -603,13 +606,17 @@ class SpeedportClient:
         # Detect legacy W 724V early using domain_name from Status.json
         # (device_name may not yet be populated at this stage)
         domain_name = str(raw.get("domain_name", ""))
+        device_name = str(raw.get("device_name", ""))
+        model_name = str(raw.get("model_name", ""))
         is_legacy_w724v = any(
-            x in domain_name or x in str(raw.get("device_name", ""))
+            x in domain_name or x in device_name or x in model_name
             for x in ("W_724V", "W 724V")
         )
         _LOGGER.debug(
-            "Model detection: domain_name=%s, is_legacy_w724v=%s",
+            "Model detection: domain_name=%s, device_name=%s, model_name=%s, is_legacy_w724v=%s",
             domain_name,
+            device_name,
+            model_name,
             is_legacy_w724v,
         )
 
@@ -639,6 +646,7 @@ class SpeedportClient:
                     ("data/LAN.json", "html/content/network/lan.html"),
                     ("data/IPData.json", "html/content/internet/con_ipdata.html"),
                     ("data/Internet.json", "html/content/internet/con_ipdata.html"),
+                    ("data/PhoneCalls.json", "html/content/phone/phone_list.html"),
                 ]:
                     try:
                         res = await self._get_json(ep, referer=ref)
@@ -692,6 +700,16 @@ class SpeedportClient:
                 )
                 raw.update(ip_data)
 
+                try:
+                    calls_data = await self._get_json(
+                        "data/PhoneCalls.json",
+                        referer="html/content/phone/phone_list.html",
+                    )
+                    if calls_data:
+                        raw.update(calls_data)
+                except Exception:
+                    pass
+
             # Heartbeat: Login.json GET fills missing fields regardless of model
             try:
                 heartbeat = await self._get_json(
@@ -699,7 +717,7 @@ class SpeedportClient:
                     referer="html/content/overview/index.html",
                 )
                 for k, v in heartbeat.items():
-                    if k not in raw:
+                    if k not in raw or not raw[k]:
                         raw[k] = v
             except Exception as exc:
                 _LOGGER.debug("Login.json heartbeat failed: %s", exc)
@@ -907,6 +925,7 @@ class SpeedportClient:
             ex5g_signal_lte=raw.get("ex5g_signal_lte", ""),
             ex5g_freq_lte=raw.get("ex5g_freq_lte", ""),
             devices=unique_devices,
+            calls=raw.get("calls", []),
             raw=raw,
         )
 
