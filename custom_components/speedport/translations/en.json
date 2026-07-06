@@ -9,6 +9,14 @@
           "password": "Router password",
           "use_https": "Use HTTPS"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Telekom Speedport",
+        "description": "Update the connection settings for your Telekom Speedport router",
+        "data": {
+          "host": "Host or IP address",
+          "password": "Router password"
+        }
       }
     },
     "error": {
@@ -17,7 +25,8 @@
       "unknown": "An unexpected error occurred"
     },
     "abort": {
-      "already_configured": "This Speedport router is already configured"
+      "already_configured": "This Speedport router is already configured",
+      "reconfigure_successful": "Reconfiguration successful"
     }
   },
   "options": {

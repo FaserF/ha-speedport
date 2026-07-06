@@ -9,6 +9,14 @@
           "password": "Router-Passwort",
           "use_https": "HTTPS verwenden"
         }
+      },
+      "reconfigure": {
+        "title": "Telekom Speedport neu konfigurieren",
+        "description": "Verbindungseinstellungen für deinen Telekom Speedport Router aktualisieren",
+        "data": {
+          "host": "Host oder IP-Adresse",
+          "password": "Router-Passwort"
+        }
       }
     },
     "error": {
@@ -17,7 +25,8 @@
       "unknown": "Ein unerwarteter Fehler ist aufgetreten"
     },
     "abort": {
-      "already_configured": "Dieser Speedport Router ist bereits konfiguriert"
+      "already_configured": "Dieser Speedport Router ist bereits konfiguriert",
+      "reconfigure_successful": "Neukonfiguration erfolgreich"
     }
   },
   "options": {

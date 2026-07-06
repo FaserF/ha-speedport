@@ -100,6 +100,64 @@ class SpeedportConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Handle reconfiguration of an existing entry."""
+        errors: dict[str, str] = {}
+        reconfigure_entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            host = user_input[CONF_HOST].strip()
+            if host.startswith(("http://", "https://")):
+                url = URL(host)
+                use_https = url.scheme == "https"
+                host = url.host or host
+                if url.port and (
+                    (use_https and url.port != 443)
+                    or (not use_https and url.port != 80)
+                ):
+                    host = f"{host}:{url.port}"
+            else:
+                host = host.rstrip("/")
+                use_https = False
+
+            password = user_input[CONF_PASSWORD]
+
+            session = aiohttp_client.async_create_clientsession(self.hass)
+            client = SpeedportClient(
+                host=host, password=password, session=session, use_https=use_https
+            )
+
+            try:
+                await client.login()
+            except SpeedportAuthError:
+                errors["base"] = "invalid_auth"
+            except (SpeedportConnectionError, Exception) as err:
+                _LOGGER.exception("Unexpected error connecting to Speedport: %s", err)
+                errors["base"] = "cannot_connect"
+            else:
+                return self.async_update_reload_and_abort(
+                    reconfigure_entry,
+                    data={
+                        CONF_HOST: host,
+                        CONF_PASSWORD: password,
+                        CONF_USE_HTTPS: use_https,
+                    },
+                )
+
+        current_host = reconfigure_entry.data.get(CONF_HOST, DEFAULT_HOST)
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST, default=current_host): str,
+                    vol.Required(CONF_PASSWORD): str,
+                }
+            ),
+            errors=errors,
+        )
+
     @staticmethod
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
