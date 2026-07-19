@@ -14,6 +14,7 @@ CONF_PASSWORD: Final = "password"
 CONF_UPDATE_INTERVAL: Final = "update_interval"
 CONF_USE_HTTPS: Final = "use_https"
 CONF_ENABLE_DEVICE_TRACKER: Final = "enable_device_tracker"
+CONF_LOGOUT_AFTER_FETCH: Final = "logout_after_fetch"
 
 
 # Defaults

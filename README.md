@@ -103,7 +103,20 @@ Most Telekom Speedport routers are closed systems with limited external access. 
 
 ## 🛠️ Options
 
-Click **Configure** on the integration page to adjust the **Update Interval** (default: 30 seconds).
+Click **Configure** on the integration page to adjust the **Update Interval** (default: 30 seconds), enable/disable device tracking, or configure the logout behavior.
+
+## ⚠️ Troubleshooting & Known Limitations
+
+### Telekom Zuhause App — "The device list could not be loaded"
+Speedport routers typically enforce a single active session lock. Because Home Assistant periodically polls the router's API to fetch updates, keeping the session open continuously blocks background administration synchronization (like TR-069 / EasySupport) that the Telekom cloud uses to query the router. As a result, the **Telekom Zuhause app** eventually fails to show connected devices and displays:
+> *"The device list could not be loaded. Please try again."*
+
+**Solution/Workaround:**
+1. Navigate to **Settings > Devices & Services** in Home Assistant.
+2. Find the **Telekom Speedport** integration and click **Configure**.
+3. Check the option **Log out after each fetch (prevents Telekom Zuhause App lockout)**.
+
+This will log out the integration at the end of each update cycle, releasing the session lock and allowing the Telekom Zuhause app to query the router normally. Note that this adds a small amount of network overhead for the integration, as it must log in on every poll.
 
 ## 🧱 Entities
 

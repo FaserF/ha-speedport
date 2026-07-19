@@ -14,6 +14,7 @@ from yarl import URL
 from .api import SpeedportAuthError, SpeedportClient, SpeedportConnectionError
 from .const import (
     CONF_ENABLE_DEVICE_TRACKER,
+    CONF_LOGOUT_AFTER_FETCH,
     CONF_PASSWORD,
     CONF_UPDATE_INTERVAL,
     CONF_USE_HTTPS,
@@ -186,6 +187,9 @@ class SpeedportOptionsFlow(config_entries.OptionsFlow):
         current_enable_device_tracker = self.config_entry.options.get(
             CONF_ENABLE_DEVICE_TRACKER, True
         )
+        current_logout_after_fetch = self.config_entry.options.get(
+            CONF_LOGOUT_AFTER_FETCH, False
+        )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
@@ -196,6 +200,10 @@ class SpeedportOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_ENABLE_DEVICE_TRACKER,
                         default=current_enable_device_tracker,
+                    ): bool,
+                    vol.Optional(
+                        CONF_LOGOUT_AFTER_FETCH,
+                        default=current_logout_after_fetch,
                     ): bool,
                 }
             ),

@@ -3,7 +3,7 @@ name = "ha-speedport"
 version = "1.1.4-dev0"
 description = "Telekom Speedport integration for Home Assistant"
 readme = "README.md"
-requires-python = "==3.14.6"
+requires-python = ">=3.14"
 dependencies = [
     "aiohttp",
     "voluptuous",
@@ -15,7 +15,7 @@ dependencies = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM"]

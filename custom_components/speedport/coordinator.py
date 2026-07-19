@@ -17,7 +17,12 @@ from .api import (
     SpeedportConnectionError,
     SpeedportData,
 )
-from .const import CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, DOMAIN
+from .const import (
+    CONF_LOGOUT_AFTER_FETCH,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -81,6 +86,14 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
 
         # Update device registry
         await self._async_update_device_registry(data)
+
+        # Logout after update if enabled to avoid session locks (e.g. for Telekom Zuhause App)
+        if self.config_entry.options.get(CONF_LOGOUT_AFTER_FETCH, False):
+            try:
+                await self.client.logout()
+            except Exception as err:
+                _LOGGER.debug("Failed to logout after update: %s", err)
+
         return data
 
     def _async_fire_events(self, data: SpeedportData) -> None:

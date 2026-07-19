@@ -35,7 +35,8 @@
         "title": "Speedport Options",
         "data": {
           "update_interval": "Update interval (seconds)",
-          "enable_device_tracker": "Enable device tracking"
+          "enable_device_tracker": "Enable device tracking",
+          "logout_after_fetch": "Log out after each fetch (prevents Telekom Zuhause App lockout)"
         }
       }
     }

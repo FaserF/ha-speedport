@@ -35,7 +35,8 @@
         "title": "Speedport Optionen",
         "data": {
           "update_interval": "Aktualisierungsintervall (Sekunden)",
-          "enable_device_tracker": "Geräteerkennung aktivieren"
+          "enable_device_tracker": "Geräteerkennung aktivieren",
+          "logout_after_fetch": "Nach jedem Abruf ausloggen (verhindert Sperre der Telekom Zuhause App)"
         }
       }
     }
