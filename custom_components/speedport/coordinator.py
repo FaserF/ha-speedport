@@ -88,6 +88,7 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
         await self._async_update_device_registry(data)
 
         # Logout after update if enabled to avoid session locks (e.g. for Telekom Zuhause App)
+        assert self.config_entry is not None
         if self.config_entry.options.get(CONF_LOGOUT_AFTER_FETCH, False):
             try:
                 await self.client.logout()
