@@ -772,7 +772,7 @@ class SpeedportClient:
                 if val is None:
                     return default
                 return int(val)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return default
 
         def _bool(val: Any) -> bool | None:
