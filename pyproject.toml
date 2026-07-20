@@ -3,7 +3,7 @@ name = "ha-speedport"
 version = "1.1.4-dev0"
 description = "Telekom Speedport integration for Home Assistant"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = "==3.14.6"
 dependencies = [
     "aiohttp",
     "voluptuous",
@@ -37,3 +37,4 @@ warn_return_any = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+pythonpath = ["."]

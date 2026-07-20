@@ -300,17 +300,8 @@ class SpeedportClient:
         if not self._logged_in:
             return
         try:
-            # Arcadyan models like W 724V Typ B use logout: "byby"
-            kwargs = self._req_kwargs()
-            headers = dict(kwargs.get("headers", {}))
-            headers["X-Requested-With"] = "XMLHttpRequest"
-
-            await self._session.post(
-                f"{self._base_url}/data/Login.json",
-                data={"logout": "byby"},
-                headers=headers,
-                **{k: v for k, v in kwargs.items() if k != "headers"},
-            )
+            # Send logout request. On modern models, this must be encrypted via _post_json.
+            await self._post_json("data/Login.json", {"logout": "byby"}, referer="")
         except Exception as exc:
             _LOGGER.debug("Logout failed: %s", exc)
         finally:
