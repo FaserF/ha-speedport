@@ -5,7 +5,7 @@ pytest==9.1.1
 pytest-asyncio==1.4.0
 pytest-cov==7.1.0
 respx==0.23.1
-syrupy==5.5.3
+syrupy==6.0.0
 types-pytz==2026.3.1.20260727
 aiohttp
 voluptuous
