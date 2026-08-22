@@ -184,6 +184,12 @@ async def test_logout():
 
         from unittest.mock import AsyncMock, MagicMock
 
+        mock_response_get = MagicMock()
+        mock_response_get.read = AsyncMock(return_value=b"var _httoken = 987654321;")
+        mock_response_get.text = AsyncMock(return_value="var _httoken = 987654321;")
+        mock_response_get.__aenter__ = AsyncMock(return_value=mock_response_get)
+        mock_response_get.__aexit__ = AsyncMock(return_value=None)
+
         mock_response_post = MagicMock()
         mock_response_post.text = AsyncMock(
             return_value='[{"varid":"status","varvalue":"ok"}]'
@@ -191,6 +197,7 @@ async def test_logout():
         mock_response_post.__aenter__ = AsyncMock(return_value=mock_response_post)
         mock_response_post.__aexit__ = AsyncMock(return_value=None)
 
+        session.get = MagicMock(return_value=mock_response_get)  # type: ignore[method-assign]
         session.post = MagicMock(return_value=mock_response_post)  # type: ignore[method-assign]
 
         await client.logout()
