@@ -294,18 +294,36 @@ class SpeedportClient:
         self._logged_in = False
         self._login_key: str | None = None  # Challenge key for modern models
         self._encrypted_mode: bool | None = None  # Detected on first request
+        self._token: str | None = None  # httoken / _tn for legacy models
 
     async def logout(self) -> None:
         """Log out from the Speedport."""
         if not self._logged_in:
             return
         try:
-            # Send logout request. On modern models, this must be encrypted via _post_json.
-            await self._post_json("data/Login.json", {"logout": "byby"}, referer="")
+            # Modern encrypted models may require the session key (auth=True) and a valid referer.
+            referer = "html/content/overview/index.html"
+            res = await self._post_json(
+                "data/Login.json", {"logout": "byby"}, referer=referer, auth=True
+            )
+            _LOGGER.debug("Logout response (auth=True): %s", res)
+
+            # Fallback to DEFAULT_KEY or unauthenticated POST if needed
+            if (
+                not res
+                or res.get("status") not in ("ok", "success")
+                and res.get("login") not in ("success", "ok")
+            ):
+                res_default = await self._post_json(
+                    "data/Login.json", {"logout": "byby"}, referer=referer, auth=False
+                )
+                _LOGGER.debug("Logout response (auth=False): %s", res_default)
         except Exception as exc:
             _LOGGER.debug("Logout failed: %s", exc)
         finally:
             self._logged_in = False
+            self._login_key = None
+            self._token = None
 
     @property
     def is_logged_in(self) -> bool:
@@ -442,8 +460,12 @@ class SpeedportClient:
             ref_url = f"{self._base_url}/{referer}"
             headers["Referer"] = ref_url
             token = await self._get_httoken(ref_url)
+            if not token and self._token:
+                token = self._token
             if token:
                 data = {**data, "httoken" if self._encrypted_mode else "_tn": token}
+        elif self._token and not self._encrypted_mode:
+            data = {**data, "_tn": self._token}
 
         body_str = "&".join(f"{k}={v}" for k, v in data.items())
         key = (

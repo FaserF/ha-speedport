@@ -172,3 +172,27 @@ async def test_set_wifi():
 
         success = await client.set_wifi(True)
         assert success is True
+
+
+@pytest.mark.asyncio
+async def test_logout():
+    """Test logout method."""
+    async with aiohttp.ClientSession() as session:
+        client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
+        client._logged_in = True
+        client._login_key = "dummy_key"
+
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_response_post = MagicMock()
+        mock_response_post.text = AsyncMock(
+            return_value='[{"varid":"status","varvalue":"ok"}]'
+        )
+        mock_response_post.__aenter__ = AsyncMock(return_value=mock_response_post)
+        mock_response_post.__aexit__ = AsyncMock(return_value=None)
+
+        session.post = MagicMock(return_value=mock_response_post)  # type: ignore[method-assign]
+
+        await client.logout()
+        assert client.is_logged_in is False
+        assert client._login_key is None
