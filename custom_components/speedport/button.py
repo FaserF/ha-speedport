@@ -87,5 +87,7 @@ class SpeedportButton(SpeedportEntity, ButtonEntity):
             await self._client.reboot()
         elif action == "reconnect":
             await self._client.reconnect()
+            await self.coordinator.async_request_refresh()
         elif action == "wps_on":
             await self._client.wps_on()
+            await self.coordinator.async_request_refresh()

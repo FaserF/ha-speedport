@@ -235,7 +235,6 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
 
         # Disable rarely used sensors by default
         if description.key in (
-            "public_ip_v6",
             "dns_v4",
             "dsl_pop",
             "ex5g_signal_5g",

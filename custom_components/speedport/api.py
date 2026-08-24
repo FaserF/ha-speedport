@@ -344,18 +344,15 @@ class SpeedportClient:
         }
 
     async def _get_httoken(self, page_url: str) -> str:
-        """Fetch a page and extract the httoken CSRF value (Legacy)."""
+        """Fetch a page and extract the httoken CSRF value (Legacy & Modern)."""
         try:
             kwargs = self._req_kwargs()
             async with self._session.get(page_url, **kwargs) as resp:
                 raw = await resp.read()
                 text = raw.decode("latin-1", errors="replace")
-                for pattern in [
-                    r"var _httoken = \"?(\d+)\"?;",
-                ]:
-                    if match := re.search(pattern, text):
-                        _LOGGER.debug("Found httoken: %s", match.group(1))
-                        return match.group(1)
+                if match := re.search(r"[_]?httoken\s*=\s*['\"]?(\d+)", text):
+                    _LOGGER.debug("Found httoken: %s from %s", match.group(1), page_url)
+                    return match.group(1)
         except Exception as exc:
             _LOGGER.debug("Could not get httoken from %s: %s", page_url, exc)
         return ""
@@ -377,20 +374,22 @@ class SpeedportClient:
         else:
             url += f"?_time={timestamp}&_rand={rand}"
 
-        # For legacy models like W 724V Typ B, we must pass _tn token in GET requests
-        if hasattr(self, "_token") and self._token:
-            url += f"&_tn={self._token}"
-
         kwargs = self._req_kwargs()
         headers = dict(kwargs.get("headers", {}))
         headers["X-Requested-With"] = "XMLHttpRequest"
 
-        # For legacy models like W 724V, Referer MUST be the login page for data endpoints
-        if not referer:
-            referer = "html/login/index.html"
-
-        ref_url = f"{self._base_url}/{referer}"
-        headers["Referer"] = ref_url
+        if referer:
+            ref_url = f"{self._base_url}/{referer}"
+            headers["Referer"] = ref_url
+            token = await self._get_httoken(ref_url)
+            if not token and hasattr(self, "_token") and self._token:
+                token = self._token
+            if token:
+                url += f"&_tn={token}"
+        elif hasattr(self, "_token") and self._token:
+            url += f"&_tn={self._token}"
+            if not referer:
+                headers["Referer"] = f"{self._base_url}/html/login/index.html"
 
         try:
             async with self._session.get(
@@ -448,7 +447,7 @@ class SpeedportClient:
             raise SpeedportConnectionError(f"GET {url} failed: {exc}") from exc
 
     async def _post_json(
-        self, path: str, data: dict[str, Any], referer: str = "", auth: bool = False
+        self, path: str, data: dict[str, Any], referer: str = "", auth: bool = True
     ) -> dict[str, Any]:
         """Perform a POST request and parse the JSON response."""
         url = f"{self._base_url}/{path}"
@@ -460,11 +459,11 @@ class SpeedportClient:
             ref_url = f"{self._base_url}/{referer}"
             headers["Referer"] = ref_url
             token = await self._get_httoken(ref_url)
-            if not token and self._token:
+            if not token and hasattr(self, "_token") and self._token:
                 token = self._token
             if token:
                 data = {**data, "httoken" if self._encrypted_mode else "_tn": token}
-        elif self._token and not self._encrypted_mode:
+        elif hasattr(self, "_token") and self._token and not self._encrypted_mode:
             data = {**data, "_tn": self._token}
 
         body_str = "&".join(f"{k}={v}" for k, v in data.items())
@@ -493,20 +492,46 @@ class SpeedportClient:
 
     async def set_wifi(self, on: bool) -> bool:
         """Turn WiFi on or off."""
-        return await self._set_module_state({"use_wlan": "1" if on else "0"})
+        return await self._set_module_state(
+            {"use_wlan": "1" if on else "0"},
+            referer="html/content/network/wlan_basic.html",
+        )
 
     async def set_wifi_guest(self, on: bool) -> bool:
         """Turn Guest WiFi on or off."""
-        return await self._set_module_state({"wlan_guest_active": "1" if on else "0"})
+        referer = "html/content/network/wlan_guest.html"
+        data = {"wlan_guest_active": "1" if on else "0"}
+        try:
+            res = await self._post_json(
+                "data/WLANBasic.json", data, referer=referer, auth=True
+            )
+            if res.get("status") == "ok":
+                return True
+        except Exception:
+            pass
+        return await self._set_module_state(data, referer=referer)
 
     async def set_wifi_office(self, on: bool) -> bool:
         """Turn Office WiFi on or off."""
-        return await self._set_module_state({"wlan_office_active": "1" if on else "0"})
+        referer = "html/content/network/wlan_office.html"
+        data = {"wlan_office_active": "1" if on else "0"}
+        try:
+            res = await self._post_json(
+                "data/WLANBasic.json", data, referer=referer, auth=True
+            )
+            if res.get("status") == "ok":
+                return True
+        except Exception:
+            pass
+        return await self._set_module_state(data, referer=referer)
 
-    async def _set_module_state(self, data: dict[str, str]) -> bool:
+    async def _set_module_state(
+        self, data: dict[str, str], referer: str = "html/content/overview/index.html"
+    ) -> bool:
         """Set a module state via Modules.json."""
-        referer = "html/content/overview/index.html"
-        result = await self._post_json("data/Modules.json", data, referer=referer)
+        result = await self._post_json(
+            "data/Modules.json", data, referer=referer, auth=True
+        )
         return result.get("status") == "ok"
 
     async def _get_challenge(self) -> str | None:
@@ -587,11 +612,12 @@ class SpeedportClient:
                         # Navigate to overview to "activate" the session
                         nav_headers = dict(kwargs.get("headers", {}))
                         nav_headers["Referer"] = login_page
-                        await self._session.get(
+                        async with self._session.get(
                             f"{self._base_url}/html/content/overview/index.html?lang=de",
                             headers=nav_headers,
                             **{k: v for k, v in kwargs.items() if k != "headers"},
-                        )
+                        ):
+                            pass
                         self._logged_in = True
                         _LOGGER.info(
                             "Successfully logged in (Legacy mode) to %s", self._host
@@ -694,6 +720,14 @@ class SpeedportClient:
                 )
                 raw.update(overview)
 
+                secure_status = await self._get_json(
+                    "data/SecureStatus.json",
+                    referer="html/content/overview/index.html",
+                    auth=True,
+                )
+                if secure_status:
+                    raw.update(secure_status)
+
                 wlan_basic = await self._get_json(
                     "data/WLANBasic.json",
                     referer="html/content/network/wlan_basic.html",
@@ -715,18 +749,18 @@ class SpeedportClient:
                 ip_data = await self._get_json(
                     "data/IPData.json",
                     referer="html/content/internet/con_ipdata.html",
-                    auth=False,
+                    auth=True,
                 )
                 if not ip_data or not ip_data.get("public_ip_v4"):
-                    # Fallback to auth=True if it is empty/failed
+                    # Fallback to auth=False if needed
                     try:
-                        ip_data_auth = await self._get_json(
+                        ip_data_fallback = await self._get_json(
                             "data/IPData.json",
                             referer="html/content/internet/con_ipdata.html",
-                            auth=True,
+                            auth=False,
                         )
-                        if ip_data_auth:
-                            ip_data.update(ip_data_auth)
+                        if ip_data_fallback:
+                            ip_data.update(ip_data_fallback)
                     except Exception:
                         pass
                 raw.update(ip_data)
@@ -735,6 +769,7 @@ class SpeedportClient:
                     calls_data = await self._get_json(
                         "data/PhoneCalls.json",
                         referer="html/content/phone/phone_list.html",
+                        auth=True,
                     )
                     if calls_data:
                         raw.update(calls_data)
@@ -935,10 +970,44 @@ class SpeedportClient:
             wlan_office_ssid=raw.get("wlan_office_ssid", ""),
             public_ip_v4=raw.get(
                 "public_ip_v4",
-                raw.get("ip_extern", raw.get("srv_ipv4_wan", raw.get("other_ip", ""))),
+                raw.get(
+                    "ip_extern",
+                    raw.get(
+                        "srv_ipv4_wan",
+                        raw.get(
+                            "wan_ip4_addr",
+                            raw.get(
+                                "wan_ip_address",
+                                raw.get(
+                                    "wan_ipv4",
+                                    raw.get("other_ip", raw.get("ip_v4", "")),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
             ),
             public_ip_v6=raw.get(
-                "public_ip_v6", raw.get("ip_v6_extern", raw.get("ip_v6", ""))
+                "public_ip_v6",
+                raw.get(
+                    "ip_v6_extern",
+                    raw.get(
+                        "srv_ipv6_wan",
+                        raw.get(
+                            "wan_ip6_addr",
+                            raw.get(
+                                "wan_ipv6",
+                                raw.get(
+                                    "transmitted_ip_v6_pool_for_lan",
+                                    raw.get(
+                                        "used_ip_v6_lan",
+                                        raw.get("other_ip6", raw.get("ip_v6", "")),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
             ),
             dns_v4=raw.get(
                 "dns_v4",
@@ -990,6 +1059,7 @@ class SpeedportClient:
             "data/WLANAccess.json",
             {"wlan_add": "on", "wps_key": "connect"},
             referer="html/content/network/wlan_wps.html",
+            auth=True,
         )
         return result.get("status") == "ok"
 

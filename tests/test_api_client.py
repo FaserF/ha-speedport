@@ -203,3 +203,82 @@ async def test_logout():
         await client.logout()
         assert client.is_logged_in is False
         assert client._login_key is None
+
+
+@pytest.mark.asyncio
+async def test_buttons_actions():
+    """Test button actions: reboot, reconnect, wps_on."""
+    async with aiohttp.ClientSession() as session:
+        client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
+        client._logged_in = True
+
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_get = MagicMock()
+        mock_get.read = AsyncMock(return_value=b"httoken = 123456789;")
+        mock_get.text = AsyncMock(return_value="httoken = 123456789;")
+        mock_get.__aenter__ = AsyncMock(return_value=mock_get)
+        mock_get.__aexit__ = AsyncMock(return_value=None)
+
+        mock_post = MagicMock()
+        mock_post.text = AsyncMock(return_value='[{"varid":"status","varvalue":"ok"}]')
+        mock_post.__aenter__ = AsyncMock(return_value=mock_post)
+        mock_post.__aexit__ = AsyncMock(return_value=None)
+
+        session.get = MagicMock(return_value=mock_get)  # type: ignore[method-assign]
+        session.post = MagicMock(return_value=mock_post)  # type: ignore[method-assign]
+
+        assert await client.reboot() is True
+        assert await client.reconnect() is True
+        assert await client.wps_on() is True
+
+
+@pytest.mark.asyncio
+async def test_modern_ip_data():
+    """Test modern router fetching IPData.json and populating IPv4 & IPv6."""
+    async with aiohttp.ClientSession() as session:
+        client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
+        client._logged_in = True
+
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_token_page = MagicMock()
+        mock_token_page.read = AsyncMock(return_value=b"httoken = 555666777;")
+        mock_token_page.text = AsyncMock(return_value="httoken = 555666777;")
+        mock_token_page.__aenter__ = AsyncMock(return_value=mock_token_page)
+        mock_token_page.__aexit__ = AsyncMock(return_value=None)
+
+        mock_status = MagicMock()
+        mock_status.text = AsyncMock(
+            return_value='[{"varid":"device_name","varvalue":"Speedport Smart 4"}]'
+        )
+        mock_status.__aenter__ = AsyncMock(return_value=mock_status)
+        mock_status.__aexit__ = AsyncMock(return_value=None)
+
+        mock_ip_data = MagicMock()
+        mock_ip_data.text = AsyncMock(
+            return_value='[{"varid":"public_ip_v4","varvalue":"93.184.216.34"},{"varid":"public_ip_v6","varvalue":"2001:db8::1"}]'
+        )
+        mock_ip_data.__aenter__ = AsyncMock(return_value=mock_ip_data)
+        mock_ip_data.__aexit__ = AsyncMock(return_value=None)
+
+        mock_empty = MagicMock()
+        mock_empty.text = AsyncMock(return_value="[]")
+        mock_empty.__aenter__ = AsyncMock(return_value=mock_empty)
+        mock_empty.__aexit__ = AsyncMock(return_value=None)
+
+        def mock_get_handler(url, *args, **kwargs):
+            url_str = str(url)
+            if "con_ipdata.html" in url_str:
+                return mock_token_page
+            if "data/IPData.json" in url_str:
+                return mock_ip_data
+            if "data/Status.json" in url_str:
+                return mock_status
+            return mock_empty
+
+        session.get = MagicMock(side_effect=mock_get_handler)  # type: ignore[method-assign]
+
+        data = await client.get_all_data()
+        assert data.public_ip_v4 == "93.184.216.34"
+        assert data.public_ip_v6 == "2001:db8::1"
