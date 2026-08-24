@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from contextlib import suppress
 from dataclasses import dataclass, field
 from hashlib import md5, sha256
 from typing import Any, cast
@@ -301,29 +302,45 @@ class SpeedportClient:
         if not self._logged_in:
             return
         try:
-            # Modern encrypted models may require the session key (auth=True) and a valid referer.
+            # Modern encrypted models require the session key (auth=True) and a valid referer.
             referer = "html/content/overview/index.html"
             res = await self._post_json(
                 "data/Login.json", {"logout": "byby"}, referer=referer, auth=True
             )
             _LOGGER.debug("Logout response (auth=True): %s", res)
 
-            # Fallback to DEFAULT_KEY or unauthenticated POST if needed
-            if (
-                not res
-                or res.get("status") not in ("ok", "success")
-                and res.get("login") not in ("success", "ok")
+            # Fallback to alternative logout bodies or unauthenticated POST if needed
+            if not res or (
+                res.get("status") not in ("ok", "success")
+                and res.get("login") not in ("success", "ok", "false", "fail")
             ):
-                res_default = await self._post_json(
-                    "data/Login.json", {"logout": "byby"}, referer=referer, auth=False
-                )
-                _LOGGER.debug("Logout response (auth=False): %s", res_default)
+                for alt_body in ({"logout": "true"}, {"logout": "1"}):
+                    with suppress(Exception):
+                        await self._post_json(
+                            "data/Login.json", alt_body, referer=referer, auth=True
+                        )
+                with suppress(Exception):
+                    res_default = await self._post_json(
+                        "data/Login.json",
+                        {"logout": "byby"},
+                        referer=referer,
+                        auth=False,
+                    )
+                    _LOGGER.debug("Logout response (auth=False): %s", res_default)
         except Exception as exc:
             _LOGGER.debug("Logout failed: %s", exc)
         finally:
             self._logged_in = False
             self._login_key = None
             self._token = None
+            if (
+                hasattr(self._session, "cookie_jar")
+                and self._session.cookie_jar is not None
+            ):
+                with suppress(Exception):
+                    self._session.cookie_jar.clear_domain(URL(self._base_url))
+                with suppress(Exception):
+                    self._session.cookie_jar.clear()
 
     @property
     def is_logged_in(self) -> bool:
@@ -381,11 +398,14 @@ class SpeedportClient:
         if referer:
             ref_url = f"{self._base_url}/{referer}"
             headers["Referer"] = ref_url
-            token = await self._get_httoken(ref_url)
-            if not token and hasattr(self, "_token") and self._token:
-                token = self._token
-            if token:
-                url += f"&_tn={token}"
+            if hasattr(self, "_token") and self._token and not self._encrypted_mode:
+                url += f"&_tn={self._token}"
+            else:
+                token = await self._get_httoken(ref_url)
+                if not token and hasattr(self, "_token") and self._token:
+                    token = self._token
+                if token:
+                    url += f"&_tn={token}"
         elif hasattr(self, "_token") and self._token:
             url += f"&_tn={self._token}"
             if not referer:
@@ -458,11 +478,14 @@ class SpeedportClient:
         if referer:
             ref_url = f"{self._base_url}/{referer}"
             headers["Referer"] = ref_url
-            token = await self._get_httoken(ref_url)
-            if not token and hasattr(self, "_token") and self._token:
-                token = self._token
-            if token:
-                data = {**data, "httoken" if self._encrypted_mode else "_tn": token}
+            if hasattr(self, "_token") and self._token and not self._encrypted_mode:
+                data = {**data, "_tn": self._token}
+            else:
+                token = await self._get_httoken(ref_url)
+                if not token and hasattr(self, "_token") and self._token:
+                    token = self._token
+                if token:
+                    data = {**data, "httoken" if self._encrypted_mode else "_tn": token}
         elif hasattr(self, "_token") and self._token and not self._encrypted_mode:
             data = {**data, "_tn": self._token}
 

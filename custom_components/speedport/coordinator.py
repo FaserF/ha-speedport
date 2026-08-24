@@ -89,7 +89,10 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
 
         # Logout after update if enabled to avoid session locks (e.g. for Telekom Zuhause App)
         assert self.config_entry is not None
-        if self.config_entry.options.get(CONF_LOGOUT_AFTER_FETCH, False):
+        if self.config_entry.options.get(
+            CONF_LOGOUT_AFTER_FETCH,
+            self.config_entry.data.get(CONF_LOGOUT_AFTER_FETCH, False),
+        ):
             try:
                 await self.client.logout()
             except Exception as err:
