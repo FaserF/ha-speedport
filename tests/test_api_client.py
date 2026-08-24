@@ -53,18 +53,12 @@ async def test_login_success_legacy():
             return_value=mock_response_get_activation
         )
         mock_response_get_activation.__aexit__ = AsyncMock(return_value=None)
-        # Also make it awaitable directly for the line `await self._session.get(...)`
-        mock_response_get_activation_coro = AsyncMock(
-            return_value=mock_response_get_activation
-        )
 
         def mock_get(url, *args, **kwargs):
             url_str = str(url)
             if "html/login/index.html" in url_str:
                 return mock_response_get_token
-            if "html/content/overview/index.html" in url_str:
-                return mock_response_get_activation_coro()
-            return mock_response_get_activation_coro()
+            return mock_response_get_activation
 
         def mock_post(url, *args, **kwargs):
             data = kwargs.get("data", "")
