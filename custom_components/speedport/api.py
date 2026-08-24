@@ -338,7 +338,7 @@ class SpeedportClient:
                 and self._session.cookie_jar is not None
             ):
                 with suppress(Exception):
-                    self._session.cookie_jar.clear_domain(URL(self._base_url))
+                    self._session.cookie_jar.clear_domain(self._host)
                 with suppress(Exception):
                     self._session.cookie_jar.clear()
 
