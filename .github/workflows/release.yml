@@ -270,18 +270,16 @@ jobs:
       contents: write
       actions: write
     steps:
-      - name: Delete Draft Release
+      - name: Delete Draft Release and Tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.versioning.outputs.tag }}
         shell: bash
         run: |
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-
-
-
- 
+          git tag -d "$TAG" 2>/dev/null || true
+          git push --delete origin "$TAG" 2>/dev/null || true
       - name: Delete Component Artifact
         uses: actions/github-script@v9.0.0
         with:
