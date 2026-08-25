@@ -164,8 +164,8 @@ jobs:
           IS_PRERELEASE: ${{ needs.versioning.outputs.is_prerelease }}
         shell: bash
         run: |
-          release_id=$(gh api --retry 3 "repos/$REPO/releases" --jq '.[] | select(.tag_name=="'$TAG'" or .name=="Release '$VERSION'") | select(.draft==true) | .id' 2>/dev/null || true)
-          if [ -n "$release_id" ]; then
+          release_id=$(gh api "repos/$REPO/releases/tags/$TAG" --jq '.id' 2>/dev/null || true)
+          if [ -n "$release_id" ] && [ "$release_id" != "null" ]; then
             gh api -X DELETE "repos/$REPO/releases/$release_id" 2>/dev/null || true
           fi
           git tag -d "$TAG" 2>/dev/null || true
@@ -225,8 +225,8 @@ jobs:
           IS_PRERELEASE: ${{ needs.versioning.outputs.is_prerelease }}
         shell: bash
         run: |
-          # Find existing draft release with retry and fallback
-          release_id=$(gh api --retry 3 "repos/$REPO/releases" --jq '.[] | select(.tag_name=="'$TAG'" or .name=="Release '$VERSION'") | select(.draft==true) | .id' 2>/dev/null || true)
+          # Find existing draft release by direct tag
+          release_id=$(gh api "repos/$REPO/releases/tags/$TAG" --jq '.id' 2>/dev/null || true)
           
           # Set prerelease argument
           prerelease_arg=""
@@ -234,7 +234,7 @@ jobs:
             prerelease_arg="--prerelease"
           fi
           
-          if [ -n "$release_id" ]; then
+          if [ -n "$release_id" ] && [ "$release_id" != "null" ]; then
             # Update the existing draft release to publish it
             gh api -X PATCH "repos/$REPO/releases/$release_id" \
               -f tag_name="$TAG" \
