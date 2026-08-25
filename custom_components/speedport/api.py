@@ -1098,15 +1098,16 @@ class SpeedportClient:
             or result.get("wlan_add") == "on"
         )
 
-    async def get_update_info(self) -> dict[str, Any]:
+    async def get_update_info(self, check: bool = False) -> dict[str, Any]:
         """Get firmware update information."""
         await self._ensure_auth()
-        # First trigger a check
-        await self._post_json(
-            "data/Update.json",
-            {"req_update": "check"},
-            referer="html/content/config/check_for_updates.html",
-        )
+        if check:
+            with suppress(Exception):
+                await self._post_json(
+                    "data/Update.json",
+                    {"req_update": "check"},
+                    referer="html/content/config/check_for_updates.html",
+                )
         # Then get the result
         return await self._get_json(
             "data/Update.json", referer="html/content/config/check_for_updates.html"

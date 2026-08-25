@@ -39,6 +39,7 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
         """Initialize the coordinator."""
         self.client = client
         self.config_entry = entry
+        self._last_update_check: float = 0.0
 
         update_interval = entry.options.get(
             CONF_UPDATE_INTERVAL,
@@ -67,9 +68,15 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
         except (SpeedportConnectionError, Exception) as err:
             raise UpdateFailed(f"Error fetching Speedport data: {err}") from err
 
-        # Fetch update info
+        # Fetch update info (only trigger active remote check once per 24h to avoid session/TR-069 lock)
         try:
-            update_info = await self.client.get_update_info()
+            import time
+
+            now = time.time()
+            check_remote = (now - self._last_update_check) > 86400
+            update_info = await self.client.get_update_info(check=check_remote)
+            if check_remote:
+                self._last_update_check = now
             if update_info:
                 data.update_info = update_info
                 # Logic for W 724V: 'update_status' might be 'new_version' or similar
