@@ -737,45 +737,30 @@ class SpeedportClient:
 
             else:
                 # Modern models: Overview first, then extended endpoints
-                overview = await self._get_json(
-                    "data/Overview.json",
-                    referer="html/content/overview/index.html",
-                )
-                raw.update(overview)
+                # Fetch all authenticated json endpoints concurrently for drastic speedup
+                tasks = [
+                    self._get_json("data/Overview.json", referer="html/content/overview/index.html"),
+                    self._get_json("data/SecureStatus.json", referer="html/content/overview/index.html", auth=True),
+                    self._get_json("data/WLANBasic.json", referer="html/content/network/wlan_basic.html"),
+                    self._get_json("data/WLANSettings.json", referer="html/content/network/wlan_settings.html"),
+                    self._get_json("data/LAN.json", referer="html/content/network/lan.html"),
+                    self._get_json("data/IPData.json", referer="html/content/internet/con_ipdata.html", auth=True),
+                    self._get_json("data/PhoneCalls.json", referer="html/content/phone/phone_list.html", auth=True),
+                ]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                secure_status = await self._get_json(
-                    "data/SecureStatus.json",
-                    referer="html/content/overview/index.html",
-                    auth=True,
-                )
+                overview, secure_status, wlan_basic, wlan_settings, lan, ip_data, calls_data = [
+                    res if isinstance(res, dict) else {} for res in results
+                ]
+
+                raw.update(overview)
                 if secure_status:
                     raw.update(secure_status)
-
-                wlan_basic = await self._get_json(
-                    "data/WLANBasic.json",
-                    referer="html/content/network/wlan_basic.html",
-                )
                 raw.update(wlan_basic)
-
-                wlan_settings = await self._get_json(
-                    "data/WLANSettings.json",
-                    referer="html/content/network/wlan_settings.html",
-                )
                 raw.update(wlan_settings)
-
-                lan = await self._get_json(
-                    "data/LAN.json",
-                    referer="html/content/network/lan.html",
-                )
                 raw.update(lan)
 
-                ip_data = await self._get_json(
-                    "data/IPData.json",
-                    referer="html/content/internet/con_ipdata.html",
-                    auth=True,
-                )
                 if not ip_data or not ip_data.get("public_ip_v4"):
-                    # Fallback to auth=False if needed
                     try:
                         ip_data_fallback = await self._get_json(
                             "data/IPData.json",
@@ -787,17 +772,8 @@ class SpeedportClient:
                     except Exception:
                         pass
                 raw.update(ip_data)
-
-                try:
-                    calls_data = await self._get_json(
-                        "data/PhoneCalls.json",
-                        referer="html/content/phone/phone_list.html",
-                        auth=True,
-                    )
-                    if calls_data:
-                        raw.update(calls_data)
-                except Exception:
-                    pass
+                if calls_data:
+                    raw.update(calls_data)
 
             # Heartbeat: Login.json GET fills missing fields regardless of model
             try:
@@ -816,19 +792,19 @@ class SpeedportClient:
 
         _LOGGER.debug("Merged raw keys: %s", list(raw.keys()))
 
-        # Devices (Try multiple endpoints for broad compatibility)
-        devices_raw: dict[str, Any] = {}
-        for path in (
+        # Devices (Try multiple endpoints concurrently for broad compatibility)
+        device_paths = (
             "data/DeviceList.json",
             "data/HomeNetwork.json",
             "data/Modules.json",
-        ):
-            try:
-                d_raw = await self._get_json(path)
-                if d_raw:
-                    devices_raw.update(d_raw)
-            except Exception:
-                continue
+        )
+        devices_raw: dict[str, Any] = {}
+        device_results = await asyncio.gather(
+            *(self._get_json(path) for path in device_paths), return_exceptions=True
+        )
+        for d_raw in device_results:
+            if isinstance(d_raw, dict):
+                devices_raw.update(d_raw)
 
         return self._build_data(raw, devices_raw)
 
