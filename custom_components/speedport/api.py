@@ -297,6 +297,9 @@ class SpeedportClient:
         self._login_key: str | None = None  # Challenge key for modern models
         self._encrypted_mode: bool | None = None  # Detected on first request
         self._token: str | None = None  # httoken / _tn for legacy models
+        self._cached_httoken: str | None = (
+            None  # Cached CSRF token (modern) to avoid per-request HTML page loads
+        )
 
     async def logout(self) -> None:
         """Log out from the Speedport."""
@@ -334,6 +337,7 @@ class SpeedportClient:
             self._logged_in = False
             self._login_key = None
             self._token = None
+            self._cached_httoken = None
             if (
                 hasattr(self._session, "cookie_jar")
                 and self._session.cookie_jar is not None
@@ -361,8 +365,17 @@ class SpeedportClient:
             },
         }
 
-    async def _get_httoken(self, page_url: str) -> str:
-        """Fetch a page and extract the httoken CSRF value (Legacy & Modern)."""
+    async def _get_httoken(self, page_url: str, force_refresh: bool = False) -> str:
+        """Fetch a page and extract the httoken CSRF value (Legacy & Modern).
+
+        On modern models the token is cached after the first successful fetch
+        within a session, reducing HTML page loads from O(N endpoints) to O(1)
+        per poll cycle.  Pass force_refresh=True after a login to prime the cache.
+        """
+        # Return cached token for modern encrypted mode (avoids per-request HTML page loads)
+        if not force_refresh and self._encrypted_mode and self._cached_httoken:
+            return self._cached_httoken
+
         try:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -380,11 +393,15 @@ class SpeedportClient:
                 if match := re.search(
                     r"(?:_httoken|httoken|_tn)\s*=\s*['\"]?(\d+)", text
                 ):
-                    _LOGGER.debug("Found httoken: %s from %s", match.group(1), page_url)
-                    return match.group(1)
+                    token = match.group(1)
+                    _LOGGER.debug("Found httoken: %s from %s", token, page_url)
+                    # Cache the token for modern models
+                    if self._encrypted_mode:
+                        self._cached_httoken = token
+                    return token
         except Exception as exc:
             _LOGGER.debug("Could not get httoken from %s: %s", page_url, exc)
-        return ""
+        return self._cached_httoken or ""
 
     async def _get_json(
         self, path: str, referer: str = "", auth: bool = False
@@ -419,14 +436,18 @@ class SpeedportClient:
             ) as resp:
                 text = await resp.text(errors="replace")
 
-                # Robust parsing: if it redirects to login, we are logged out
+                # Robust parsing: if it redirects to login, the token has expired.
+                # On modern routers (Smart 4R) the session cookie may still be valid,
+                # so we only invalidate the cached httoken rather than forcing a full
+                # re-login on every poll cycle.
                 if (
                     "Document moved" in text
                     or "login/index.html" in text
                     or "login_index_html" in text
                 ):
                     _LOGGER.debug("Session expired or redirected to login for %s", path)
-                    self._logged_in = False
+                    # Invalidate cached token but keep session alive
+                    self._cached_httoken = None
                     return {}
 
                 _LOGGER.debug(
@@ -587,6 +608,14 @@ class SpeedportClient:
                     _LOGGER.info(
                         "Successfully logged in (SHA256 mode) to %s", self._host
                     )
+                    # Prime the httoken cache once after login so that subsequent
+                    # _get_json calls don't each need to load a full HTML page.
+                    # This reduces HTTP requests per poll from ~18 to ~8.
+                    with suppress(Exception):
+                        await self._get_httoken(
+                            f"{self._base_url}/html/content/overview/index.html",
+                            force_refresh=True,
+                        )
                     return
         except SpeedportConnectionError:
             # Re-raise connection error immediately to fail fast when host is unreachable
