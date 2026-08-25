@@ -702,26 +702,24 @@ class SpeedportClient:
                 )
                 raw.update(status_auth)
 
-                # W 724V fallback endpoints for WLAN and DSL details
-                for ep, ref in [
+                # W 724V fallback endpoints for WLAN and DSL details concurrently
+                legacy_eps = [
                     ("data/WLAN.json", "html/content/network/wlan_basic.html"),
                     ("data/WLANBasic.json", "html/content/network/wlan_basic.html"),
-                    (
-                        "data/WLANSettings.json",
-                        "html/content/network/wlan_settings.html",
-                    ),
+                    ("data/WLANSettings.json", "html/content/network/wlan_settings.html"),
                     ("data/WLANGuest.json", "html/content/network/wlan_guest.html"),
                     ("data/LAN.json", "html/content/network/lan.html"),
                     ("data/IPData.json", "html/content/internet/con_ipdata.html"),
                     ("data/Internet.json", "html/content/internet/con_ipdata.html"),
                     ("data/PhoneCalls.json", "html/content/phone/phone_list.html"),
-                ]:
-                    try:
-                        res = await self._get_json(ep, referer=ref)
-                        if res:
-                            raw.update(res)
-                    except Exception:
-                        pass
+                ]
+                legacy_results = await asyncio.gather(
+                    *(self._get_json(ep, referer=ref) for ep, ref in legacy_eps),
+                    return_exceptions=True,
+                )
+                for res in legacy_results:
+                    if isinstance(res, dict):
+                        raw.update(res)
 
                 # Overview last (may return partial data on W 724V — don't override good values)
                 try:
