@@ -363,11 +363,22 @@ class SpeedportClient:
     async def _get_httoken(self, page_url: str) -> str:
         """Fetch a page and extract the httoken CSRF value (Legacy & Modern)."""
         try:
-            kwargs = self._req_kwargs()
-            async with self._session.get(page_url, **kwargs) as resp:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+            }
+            async with self._session.get(
+                page_url,
+                headers=headers,
+                ssl=False,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
                 raw = await resp.read()
                 text = raw.decode("latin-1", errors="replace")
-                if match := re.search(r"[_]?httoken\s*=\s*['\"]?(\d+)", text):
+                if match := re.search(
+                    r"(?:_httoken|httoken|_tn)\s*=\s*['\"]?(\d+)", text
+                ):
                     _LOGGER.debug("Found httoken: %s from %s", match.group(1), page_url)
                     return match.group(1)
         except Exception as exc:
@@ -378,19 +389,7 @@ class SpeedportClient:
         self, path: str, referer: str = "", auth: bool = False
     ) -> dict[str, Any]:
         """Perform a GET request and parse the JSON response."""
-        # Add cache-busting params as expected by the router
-        import random
-        import time
-
-        timestamp = int(time.time() * 1000)
-        rand = random.randint(0, 1000)
-
         url = f"{self._base_url}/{path}"
-        if "?" in url:
-            url += f"&_time={timestamp}&_rand={rand}"
-        else:
-            url += f"?_time={timestamp}&_rand={rand}"
-
         kwargs = self._req_kwargs()
         headers = dict(kwargs.get("headers", {}))
         headers["X-Requested-With"] = "XMLHttpRequest"
@@ -399,15 +398,15 @@ class SpeedportClient:
             ref_url = f"{self._base_url}/{referer}"
             headers["Referer"] = ref_url
             if hasattr(self, "_token") and self._token and not self._encrypted_mode:
-                url += f"&_tn={self._token}"
+                url += f"?_tn={self._token}"
             else:
                 token = await self._get_httoken(ref_url)
                 if not token and hasattr(self, "_token") and self._token:
                     token = self._token
                 if token:
-                    url += f"&_tn={token}"
+                    url += f"?_tn={token}"
         elif hasattr(self, "_token") and self._token:
-            url += f"&_tn={self._token}"
+            url += f"?_tn={self._token}"
             if not referer:
                 headers["Referer"] = f"{self._base_url}/html/login/index.html"
 
@@ -552,15 +551,16 @@ class SpeedportClient:
         self, data: dict[str, str], referer: str = "html/content/overview/index.html"
     ) -> bool:
         """Set a module state via Modules.json."""
+        await self._ensure_auth()
         result = await self._post_json(
             "data/Modules.json", data, referer=referer, auth=True
         )
-        return result.get("status") == "ok"
+        return bool(result) or result.get("status") == "ok"
 
     async def _get_challenge(self) -> str | None:
         """Get login challenge (Modern)."""
         data = {"getChallenge": "1"}
-        result = await self._post_json("data/Login.json", data, referer="")
+        result = await self._post_json("data/Login.json", data, referer="/", auth=False)
         return result.get("challenge")
 
     async def login(self) -> None:
@@ -1062,7 +1062,11 @@ class SpeedportClient:
             referer="html/content/internet/con_ipdata.html",
             auth=True,
         )
-        return result.get("status") == "ok"
+        return (
+            bool(result)
+            or result.get("status") == "ok"
+            or result.get("req_connect") == "reconnect"
+        )
 
     async def reboot(self) -> bool:
         """Reboot the router."""
@@ -1073,7 +1077,11 @@ class SpeedportClient:
             referer="html/content/config/restart.html",
             auth=True,
         )
-        return result.get("status") == "ok"
+        return (
+            bool(result)
+            or result.get("status") == "ok"
+            or result.get("reboot_device") == "true"
+        )
 
     async def wps_on(self) -> bool:
         """Activate WPS."""
@@ -1084,7 +1092,11 @@ class SpeedportClient:
             referer="html/content/network/wlan_wps.html",
             auth=True,
         )
-        return result.get("status") == "ok"
+        return (
+            bool(result)
+            or result.get("status") == "ok"
+            or result.get("wlan_add") == "on"
+        )
 
     async def get_update_info(self) -> dict[str, Any]:
         """Get firmware update information."""
