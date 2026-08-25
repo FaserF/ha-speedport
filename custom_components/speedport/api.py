@@ -306,31 +306,19 @@ class SpeedportClient:
         if not self._logged_in:
             return
         try:
-            # Modern encrypted models require the session key (auth=True) and a valid referer.
+            # Use unencrypted logout POST — the encrypted variant (auth=True) consistently
+            # fails with "MAC check failed" on the Smart 4R Typ B when the session has
+            # drifted during a poll cycle.  The plain POST is sufficient to release the
+            # router's single-session slot.
             referer = "html/content/overview/index.html"
-            res = await self._post_json(
-                "data/Login.json", {"logout": "byby"}, referer=referer, auth=True
-            )
-            _LOGGER.debug("Logout response (auth=True): %s", res)
-
-            # Fallback to alternative logout bodies or unauthenticated POST if needed
-            if not res or (
-                res.get("status") not in ("ok", "success")
-                and res.get("login") not in ("success", "ok", "false", "fail")
-            ):
-                for alt_body in ({"logout": "true"}, {"logout": "1"}):
-                    with suppress(Exception):
-                        await self._post_json(
-                            "data/Login.json", alt_body, referer=referer, auth=True
-                        )
-                with suppress(Exception):
-                    res_default = await self._post_json(
-                        "data/Login.json",
-                        {"logout": "byby"},
-                        referer=referer,
-                        auth=False,
-                    )
-                    _LOGGER.debug("Logout response (auth=False): %s", res_default)
+            with suppress(Exception):
+                res = await self._post_json(
+                    "data/Login.json",
+                    {"logout": "byby"},
+                    referer=referer,
+                    auth=False,
+                )
+                _LOGGER.debug("Logout response: %s", res)
         except Exception as exc:
             _LOGGER.debug("Logout failed: %s", exc)
         finally:
@@ -580,7 +568,8 @@ class SpeedportClient:
     async def _get_challenge(self) -> str | None:
         """Get login challenge (Modern)."""
         data = {"getChallenge": "1"}
-        result = await self._post_json("data/Login.json", data, referer="/", auth=False)
+        # referer="" to avoid producing a double-slash URL (http://router-ip//)
+        result = await self._post_json("data/Login.json", data, referer="", auth=False)
         return result.get("challenge")
 
     async def login(self) -> None:
@@ -765,72 +754,43 @@ class SpeedportClient:
                     _LOGGER.debug("Overview.json fetch failed (W 724V): %s", exc)
 
             else:
-                # Modern models: Overview first, then extended endpoints
-                # Fetch all authenticated json endpoints concurrently for drastic speedup
-                tasks = [
-                    self._get_json(
-                        "data/Overview.json", referer="html/content/overview/index.html"
-                    ),
-                    self._get_json(
+                # Modern models (Smart 3, Smart 4, Smart 4R, Pro):
+                # The router web server handles only ONE authenticated request at a time
+                # with the same session token — parallel requests all return "Session expired".
+                # We fetch endpoints sequentially; the small latency cost (~200 ms) is
+                # far outweighed by eliminating the session conflicts that lock out the
+                # Telekom Zuhause / MeinMagenta apps.
+                for path, referer, auth in (
+                    ("data/Overview.json", "html/content/overview/index.html", False),
+                    (
                         "data/SecureStatus.json",
-                        referer="html/content/overview/index.html",
-                        auth=True,
+                        "html/content/overview/index.html",
+                        True,
                     ),
-                    self._get_json(
+                    (
                         "data/WLANBasic.json",
-                        referer="html/content/network/wlan_basic.html",
+                        "html/content/network/wlan_basic.html",
+                        False,
                     ),
-                    self._get_json(
+                    (
                         "data/WLANSettings.json",
-                        referer="html/content/network/wlan_settings.html",
+                        "html/content/network/wlan_settings.html",
+                        False,
                     ),
-                    self._get_json(
-                        "data/LAN.json", referer="html/content/network/lan.html"
-                    ),
-                    self._get_json(
-                        "data/IPData.json",
-                        referer="html/content/internet/con_ipdata.html",
-                        auth=True,
-                    ),
-                    self._get_json(
+                    ("data/LAN.json", "html/content/network/lan.html", False),
+                    ("data/IPData.json", "html/content/internet/con_ipdata.html", True),
+                    (
                         "data/PhoneCalls.json",
-                        referer="html/content/phone/phone_list.html",
-                        auth=True,
+                        "html/content/phone/phone_list.html",
+                        True,
                     ),
-                ]
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                (
-                    overview,
-                    secure_status,
-                    wlan_basic,
-                    wlan_settings,
-                    lan,
-                    ip_data,
-                    calls_data,
-                ) = [res if isinstance(res, dict) else {} for res in results]
-
-                raw.update(overview)
-                if secure_status:
-                    raw.update(secure_status)
-                raw.update(wlan_basic)
-                raw.update(wlan_settings)
-                raw.update(lan)
-
-                if not ip_data or not ip_data.get("public_ip_v4"):
+                ):
                     try:
-                        ip_data_fallback = await self._get_json(
-                            "data/IPData.json",
-                            referer="html/content/internet/con_ipdata.html",
-                            auth=False,
-                        )
-                        if ip_data_fallback:
-                            ip_data.update(ip_data_fallback)
-                    except Exception:
-                        pass
-                raw.update(ip_data)
-                if calls_data:
-                    raw.update(calls_data)
+                        result = await self._get_json(path, referer=referer, auth=auth)
+                        if result:
+                            raw.update(result)
+                    except Exception as exc:
+                        _LOGGER.debug("Failed to fetch %s: %s", path, exc)
 
             # Heartbeat: Login.json GET fills missing fields regardless of model
             try:
