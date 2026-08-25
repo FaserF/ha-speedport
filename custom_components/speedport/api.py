@@ -372,8 +372,8 @@ class SpeedportClient:
         within a session, reducing HTML page loads from O(N endpoints) to O(1)
         per poll cycle.  Pass force_refresh=True after a login to prime the cache.
         """
-        # Return cached token for modern encrypted mode (avoids per-request HTML page loads)
-        if not force_refresh and self._encrypted_mode and self._cached_httoken:
+        # Return cached token if already present to avoid redundant HTML page fetches
+        if not force_refresh and self._cached_httoken:
             return self._cached_httoken
 
         try:
@@ -386,7 +386,7 @@ class SpeedportClient:
                 page_url,
                 headers=headers,
                 ssl=False,
-                timeout=aiohttp.ClientTimeout(total=10),
+                timeout=aiohttp.ClientTimeout(total=5),
             ) as resp:
                 raw = await resp.read()
                 text = raw.decode("latin-1", errors="replace")
@@ -395,9 +395,7 @@ class SpeedportClient:
                 ):
                     token = match.group(1)
                     _LOGGER.debug("Found httoken: %s from %s", token, page_url)
-                    # Cache the token for modern models
-                    if self._encrypted_mode:
-                        self._cached_httoken = token
+                    self._cached_httoken = token
                     return token
         except Exception as exc:
             _LOGGER.debug("Could not get httoken from %s: %s", page_url, exc)
