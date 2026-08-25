@@ -37,9 +37,12 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
         client: SpeedportClient,
     ) -> None:
         """Initialize the coordinator."""
+        import time
+
         self.client = client
         self.config_entry = entry
-        self._last_update_check: float = 0.0
+        # Initialize to current time so active update checks run in background after 24h, not during startup
+        self._last_update_check: float = time.time()
 
         update_interval = entry.options.get(
             CONF_UPDATE_INTERVAL,
