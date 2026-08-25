@@ -7,6 +7,7 @@ Supports multiple generations of Speedport routers:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -706,7 +707,10 @@ class SpeedportClient:
                 legacy_eps = [
                     ("data/WLAN.json", "html/content/network/wlan_basic.html"),
                     ("data/WLANBasic.json", "html/content/network/wlan_basic.html"),
-                    ("data/WLANSettings.json", "html/content/network/wlan_settings.html"),
+                    (
+                        "data/WLANSettings.json",
+                        "html/content/network/wlan_settings.html",
+                    ),
                     ("data/WLANGuest.json", "html/content/network/wlan_guest.html"),
                     ("data/LAN.json", "html/content/network/lan.html"),
                     ("data/IPData.json", "html/content/internet/con_ipdata.html"),
@@ -737,19 +741,47 @@ class SpeedportClient:
                 # Modern models: Overview first, then extended endpoints
                 # Fetch all authenticated json endpoints concurrently for drastic speedup
                 tasks = [
-                    self._get_json("data/Overview.json", referer="html/content/overview/index.html"),
-                    self._get_json("data/SecureStatus.json", referer="html/content/overview/index.html", auth=True),
-                    self._get_json("data/WLANBasic.json", referer="html/content/network/wlan_basic.html"),
-                    self._get_json("data/WLANSettings.json", referer="html/content/network/wlan_settings.html"),
-                    self._get_json("data/LAN.json", referer="html/content/network/lan.html"),
-                    self._get_json("data/IPData.json", referer="html/content/internet/con_ipdata.html", auth=True),
-                    self._get_json("data/PhoneCalls.json", referer="html/content/phone/phone_list.html", auth=True),
+                    self._get_json(
+                        "data/Overview.json", referer="html/content/overview/index.html"
+                    ),
+                    self._get_json(
+                        "data/SecureStatus.json",
+                        referer="html/content/overview/index.html",
+                        auth=True,
+                    ),
+                    self._get_json(
+                        "data/WLANBasic.json",
+                        referer="html/content/network/wlan_basic.html",
+                    ),
+                    self._get_json(
+                        "data/WLANSettings.json",
+                        referer="html/content/network/wlan_settings.html",
+                    ),
+                    self._get_json(
+                        "data/LAN.json", referer="html/content/network/lan.html"
+                    ),
+                    self._get_json(
+                        "data/IPData.json",
+                        referer="html/content/internet/con_ipdata.html",
+                        auth=True,
+                    ),
+                    self._get_json(
+                        "data/PhoneCalls.json",
+                        referer="html/content/phone/phone_list.html",
+                        auth=True,
+                    ),
                 ]
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                overview, secure_status, wlan_basic, wlan_settings, lan, ip_data, calls_data = [
-                    res if isinstance(res, dict) else {} for res in results
-                ]
+                (
+                    overview,
+                    secure_status,
+                    wlan_basic,
+                    wlan_settings,
+                    lan,
+                    ip_data,
+                    calls_data,
+                ) = [res if isinstance(res, dict) else {} for res in results]
 
                 raw.update(overview)
                 if secure_status:
