@@ -334,6 +334,22 @@ class SpeedportClient:
                     self._session.cookie_jar.clear_domain(self._host)
                 with suppress(Exception):
                     self._session.cookie_jar.clear()
+            # Close all pooled TCP connections to this router host.
+            # The Smart 4R Typ B tracks sessions at the TCP level — an open keep-alive
+            # connection keeps the session slot occupied even after a cookie logout.
+            # Closing the connector's cached connections ensures the router can
+            # immediately free its session slot for the Telekom Zuhause / MeinMagenta app.
+            with suppress(Exception):
+                connector = getattr(self._session, "connector", None)
+                if connector is not None and hasattr(connector, "_conns"):
+                    # aiohttp TCPConnector stores connections keyed by (host, port, ssl)
+                    keys_to_close = [
+                        k for k in connector._conns if self._host in str(k)
+                    ]
+                    for key in keys_to_close:
+                        for proto in connector._conns.pop(key, []):
+                            with suppress(Exception):
+                                proto.close()
 
     @property
     def is_logged_in(self) -> bool:
@@ -349,7 +365,12 @@ class SpeedportClient:
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
                 "Accept": "application/json, text/javascript, */*; q=0.01",
                 "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
-                "Connection": "keep-alive",
+                # Connection: close — force the router to tear down the TCP connection
+                # after each response.  The Smart 4R Typ B tracks sessions at the TCP
+                # level: while an HTTP keep-alive connection is open to the router the
+                # session slot stays occupied, blocking the Telekom Zuhause app even
+                # after a cookie-level logout.
+                "Connection": "close",
             },
         }
 
