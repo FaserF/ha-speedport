@@ -516,6 +516,20 @@ class SpeedportClient:
                 **{k: v for k, v in kwargs.items() if k != "headers"},
             ) as resp:
                 text = await resp.text(errors="replace")
+
+                # Detect session expiry in POST responses (router redirects to login)
+                if (
+                    "Document moved" in text
+                    or "login/index.html" in text
+                    or "login_index_html" in text
+                ):
+                    _LOGGER.debug(
+                        "POST session expired or redirected to login for %s", path
+                    )
+                    self._cached_httoken = None
+                    self._logged_in = False
+                    return {}
+
                 return _parse_response(text, key)
         except aiohttp.ClientError as exc:
             raise SpeedportConnectionError(f"POST {url} failed: {exc}") from exc
@@ -792,6 +806,20 @@ class SpeedportClient:
                     except Exception as exc:
                         _LOGGER.debug("Failed to fetch %s: %s", path, exc)
 
+                # IPData fallback: if we didn't get public IPs, try without auth
+                # (Smart 4 sometimes needs auth=False for plaintext IP data)
+                if not raw.get("public_ip_v4") and not raw.get("ip_extern"):
+                    try:
+                        ip_fallback = await self._get_json(
+                            "data/IPData.json",
+                            referer="html/content/internet/con_ipdata.html",
+                            auth=False,
+                        )
+                        if ip_fallback:
+                            raw.update(ip_fallback)
+                    except Exception as exc:
+                        _LOGGER.debug("IPData fallback failed: %s", exc)
+
             # Heartbeat: Login.json GET fills missing fields regardless of model
             try:
                 heartbeat = await self._get_json(
@@ -809,19 +837,23 @@ class SpeedportClient:
 
         _LOGGER.debug("Merged raw keys: %s", list(raw.keys()))
 
-        # Devices (Try multiple endpoints concurrently for broad compatibility)
-        device_paths = (
+        # Devices — fetch sequentially to avoid session conflicts on modern routers.
+        # Try DeviceList first (most reliable); fall back to HomeNetwork then Modules.
+        devices_raw: dict[str, Any] = {}
+        for device_path in (
             "data/DeviceList.json",
             "data/HomeNetwork.json",
             "data/Modules.json",
-        )
-        devices_raw: dict[str, Any] = {}
-        device_results = await asyncio.gather(
-            *(self._get_json(path) for path in device_paths), return_exceptions=True
-        )
-        for d_raw in device_results:
-            if isinstance(d_raw, dict):
-                devices_raw.update(d_raw)
+        ):
+            try:
+                d_raw = await self._get_json(device_path)
+                if isinstance(d_raw, dict) and d_raw:
+                    devices_raw.update(d_raw)
+                    # If DeviceList gave us actual device data, skip the rest
+                    if device_path == "data/DeviceList.json" and d_raw:
+                        break
+            except Exception as exc:
+                _LOGGER.debug("Failed to fetch %s: %s", device_path, exc)
 
         return self._build_data(raw, devices_raw)
 
@@ -1046,49 +1078,53 @@ class SpeedportClient:
         )
 
     # Action methods
-    async def reconnect(self) -> bool:
-        """Reconnect the internet connection."""
+    async def _post_with_retry(
+        self,
+        path: str,
+        data: dict[str, Any],
+        referer: str,
+        success_keys: dict[str, str],
+    ) -> bool:
+        """POST an action, re-login once if session has expired, then check success."""
         await self._ensure_auth()
-        result = await self._post_json(
-            "data/Connect.json",
-            {"req_connect": "reconnect"},
-            referer="html/content/internet/con_ipdata.html",
-            auth=True,
-        )
+        result = await self._post_json(path, data, referer=referer, auth=True)
+        if not result:
+            # Session may have expired between polls — force fresh login and retry once
+            _LOGGER.debug("POST %s returned empty, forcing re-login and retry", path)
+            self._logged_in = False
+            await self.login()
+            result = await self._post_json(path, data, referer=referer, auth=True)
         return (
             bool(result)
             or result.get("status") == "ok"
-            or result.get("req_connect") == "reconnect"
+            or any(result.get(k) == v for k, v in success_keys.items())
+        )
+
+    async def reconnect(self) -> bool:
+        """Reconnect the internet connection."""
+        return await self._post_with_retry(
+            "data/Connect.json",
+            {"req_connect": "reconnect"},
+            referer="html/content/internet/con_ipdata.html",
+            success_keys={"req_connect": "reconnect"},
         )
 
     async def reboot(self) -> bool:
         """Reboot the router."""
-        await self._ensure_auth()
-        result = await self._post_json(
+        return await self._post_with_retry(
             "data/Reboot.json",
             {"reboot_device": "true"},
             referer="html/content/config/restart.html",
-            auth=True,
-        )
-        return (
-            bool(result)
-            or result.get("status") == "ok"
-            or result.get("reboot_device") == "true"
+            success_keys={"reboot_device": "true"},
         )
 
     async def wps_on(self) -> bool:
         """Activate WPS."""
-        await self._ensure_auth()
-        result = await self._post_json(
+        return await self._post_with_retry(
             "data/WLANAccess.json",
             {"wlan_add": "on", "wps_key": "connect"},
             referer="html/content/network/wlan_wps.html",
-            auth=True,
-        )
-        return (
-            bool(result)
-            or result.get("status") == "ok"
-            or result.get("wlan_add") == "on"
+            success_keys={"wlan_add": "on"},
         )
 
     async def get_update_info(self, check: bool = False) -> dict[str, Any]:
