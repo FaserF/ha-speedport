@@ -374,15 +374,19 @@ class SpeedportClient:
             },
         }
 
-    async def _get_httoken(self, page_url: str, force_refresh: bool = False) -> str:
+    async def _get_httoken(
+        self, page_url: str, force_refresh: bool = False, no_cache: bool = False
+    ) -> str:
         """Fetch a page and extract the httoken CSRF value (Legacy & Modern).
 
         On modern models the token is cached after the first successful fetch
         within a session, reducing HTML page loads from O(N endpoints) to O(1)
         per poll cycle.  Pass force_refresh=True after a login to prime the cache.
+        Pass no_cache=True (e.g. for POST action commands) to always fetch fresh
+        from the given page without updating the poll-cycle cache.
         """
         # Return cached token if already present to avoid redundant HTML page fetches
-        if not force_refresh and self._cached_httoken:
+        if not force_refresh and not no_cache and self._cached_httoken:
             return self._cached_httoken
 
         try:
@@ -404,7 +408,8 @@ class SpeedportClient:
                 ):
                     token = match.group(1)
                     _LOGGER.debug("Found httoken: %s from %s", token, page_url)
-                    self._cached_httoken = token
+                    if not no_cache:
+                        self._cached_httoken = token
                     return token
         except Exception as exc:
             _LOGGER.debug("Could not get httoken from %s: %s", page_url, exc)
@@ -509,7 +514,12 @@ class SpeedportClient:
             if hasattr(self, "_token") and self._token and not self._encrypted_mode:
                 data = {**data, "_tn": self._token}
             else:
-                token = await self._get_httoken(ref_url)
+                # Always fetch httoken fresh from the correct referer page for POST requests.
+                # The Smart 4 router validates that the httoken matches the Referer page —
+                # a cached token from overview/index.html is silently rejected when the
+                # Referer is con_ipdata.html or similar.  The reference implementation
+                # (Andre0512/speedport-api) always fetches httoken fresh for every POST.
+                token = await self._get_httoken(ref_url, no_cache=True)
                 if not token and hasattr(self, "_token") and self._token:
                     token = self._token
                 if token:
