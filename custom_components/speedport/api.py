@@ -961,9 +961,11 @@ class SpeedportClient:
     xmlns:cwmp="urn:telekom-de.totr64-2-n">
   <soap-env:Body>
     <cwmp:GetParameterValues xmlns:cwmp="urn:dslforum-org:cwmp-1-0">
-      <cwmp:ParameterNames length="2">
+      <cwmp:ParameterNames length="4">
         <xsd:string>Device.IP.Interface.{idx}.Stats.BytesReceived</xsd:string>
         <xsd:string>Device.IP.Interface.{idx}.Stats.BytesSent</xsd:string>
+        <xsd:string>Device.IP.Interface.{idx}.IPv4Address.1.IPAddress</xsd:string>
+        <xsd:string>Device.IP.Interface.{idx}.IPv6Address.1.IPAddress</xsd:string>
       </cwmp:ParameterNames>
     </cwmp:GetParameterValues>
   </soap-env:Body>
@@ -1015,6 +1017,21 @@ class SpeedportClient:
                             "bytes_received": rx_bytes,
                             "bytes_sent": tx_bytes,
                         }
+
+                        # Check for IPv4 / IPv6 addresses in SOAP response
+                        ipv4_match = re.search(
+                            r"IPv4Address\.\d+\.IPAddress</Name>\s*<Value[^>]*>([0-9\.]+)</Value>",
+                            text,
+                        )
+                        if ipv4_match and ipv4_match.group(1) not in ("0.0.0.0", ""):
+                            stats["totr64_ipv4"] = ipv4_match.group(1)
+
+                        ipv6_match = re.search(
+                            r"IPv6Address\.\d+\.IPAddress</Name>\s*<Value[^>]*>([0-9a-fA-F:]+)</Value>",
+                            text,
+                        )
+                        if ipv6_match and ipv6_match.group(1) not in ("::", ""):
+                            stats["totr64_ipv6"] = ipv6_match.group(1)
 
                         # Compute bandwidth rates if we have previous sample
                         if (
@@ -1229,7 +1246,13 @@ class SpeedportClient:
                                 "wan_ip_address",
                                 raw.get(
                                     "wan_ipv4",
-                                    raw.get("other_ip", raw.get("ip_v4", "")),
+                                    raw.get(
+                                        "other_ip",
+                                        raw.get(
+                                            "ip_v4",
+                                            totr64_stats.get("totr64_ipv4", ""),
+                                        ),
+                                    ),
                                 ),
                             ),
                         ),
@@ -1250,7 +1273,13 @@ class SpeedportClient:
                                     "transmitted_ip_v6_pool_for_lan",
                                     raw.get(
                                         "used_ip_v6_lan",
-                                        raw.get("other_ip6", raw.get("ip_v6", "")),
+                                        raw.get(
+                                            "other_ip6",
+                                            raw.get(
+                                                "ip_v6",
+                                                totr64_stats.get("totr64_ipv6", ""),
+                                            ),
+                                        ),
                                     ),
                                 ),
                             ),
