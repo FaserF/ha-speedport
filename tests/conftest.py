@@ -113,6 +113,26 @@ create_mock_module(
     },
 )
 
+
+def _mock_redact(data: Any, to_redact: set[str]) -> Any:
+    if isinstance(data, dict):
+        return {
+            k: ("**REDACTED**" if k in to_redact else _mock_redact(v, to_redact))
+            for k, v in data.items()
+        }
+    if isinstance(data, list):
+        return [_mock_redact(item, to_redact) for item in data]
+    return data
+
+
+create_mock_module(
+    "homeassistant.components.diagnostics",
+    {
+        "async_redact_data": _mock_redact,
+    },
+)
+
+
 # Mock other essential modules
 essential_modules = [
     "homeassistant.config_entries",
