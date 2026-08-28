@@ -827,9 +827,17 @@ class SpeedportClient:
                     # (not with the session login_key), so auth=False is correct here.
                     # Using auth=True would pick _login_key for decryption and produce
                     # garbage/empty output on Speedport Smart 4 Typ B.
-                    ("data/IPData.json", "html/content/internet/con_ipdata.html", False),
+                    (
+                        "data/IPData.json",
+                        "html/content/internet/con_ipdata.html",
+                        False,
+                    ),
                     # data/Internet.json is an alternative endpoint used on some firmwares
-                    ("data/Internet.json", "html/content/internet/con_ipdata.html", False),
+                    (
+                        "data/Internet.json",
+                        "html/content/internet/con_ipdata.html",
+                        False,
+                    ),
                     (
                         "data/PhoneCalls.json",
                         "html/content/phone/phone_list.html",
@@ -847,8 +855,15 @@ class SpeedportClient:
                 # SecureStatus with auth=True as last resort — some firmwares include
                 # IP addresses there.
                 _ip_fields = (
-                    "public_ip_v4", "ip_extern", "srv_ipv4_wan", "wan_ip4_addr",
-                    "wan_ip_address", "wan_ipv4", "onlineipv4", "other_ip", "ip_v4",
+                    "public_ip_v4",
+                    "ip_extern",
+                    "srv_ipv4_wan",
+                    "wan_ip4_addr",
+                    "wan_ip_address",
+                    "wan_ipv4",
+                    "onlineipv4",
+                    "other_ip",
+                    "ip_v4",
                 )
                 if not any(raw.get(f) for f in _ip_fields):
                     try:
