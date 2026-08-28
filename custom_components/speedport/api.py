@@ -961,11 +961,13 @@ class SpeedportClient:
     xmlns:cwmp="urn:telekom-de.totr64-2-n">
   <soap-env:Body>
     <cwmp:GetParameterValues xmlns:cwmp="urn:dslforum-org:cwmp-1-0">
-      <cwmp:ParameterNames length="4">
+      <cwmp:ParameterNames length="6">
         <xsd:string>Device.IP.Interface.{idx}.Stats.BytesReceived</xsd:string>
         <xsd:string>Device.IP.Interface.{idx}.Stats.BytesSent</xsd:string>
         <xsd:string>Device.IP.Interface.{idx}.IPv4Address.1.IPAddress</xsd:string>
         <xsd:string>Device.IP.Interface.{idx}.IPv6Address.1.IPAddress</xsd:string>
+        <xsd:string>Device.DNS.Client.Server.1.DNSServer</xsd:string>
+        <xsd:string>Device.IP.Interface.{idx}.IPv4Address.1.DNSServers</xsd:string>
       </cwmp:ParameterNames>
     </cwmp:GetParameterValues>
   </soap-env:Body>
@@ -1033,6 +1035,20 @@ class SpeedportClient:
                         if ipv6_match and ipv6_match.group(1) not in ("::", ""):
                             stats["totr64_ipv6"] = ipv6_match.group(1)
 
+                        # Check for DNS Server in SOAP response
+                        dns_match = re.search(
+                            r"DNSServer(?:s)?</Name>\s*<Value[^>]*>([0-9\., ]+)</Value>",
+                            text,
+                        )
+                        if dns_match and dns_match.group(1).strip() not in (
+                            "0.0.0.0",
+                            "",
+                        ):
+                            # Take first DNS if comma-separated
+                            stats["totr64_dns_v4"] = (
+                                dns_match.group(1).split(",")[0].strip()
+                            )
+
                         # Compute bandwidth rates if we have previous sample
                         if (
                             self._prev_bytes_received is not None
@@ -1040,6 +1056,7 @@ class SpeedportClient:
                             and self._prev_bytes_time is not None
                         ):
                             elapsed = now - self._prev_bytes_time
+
                             if elapsed > 0.5:
                                 delta_rx = rx_bytes - self._prev_bytes_received
                                 delta_tx = tx_bytes - self._prev_bytes_sent
@@ -1289,7 +1306,13 @@ class SpeedportClient:
             ),
             dns_v4=raw.get(
                 "dns_v4",
-                raw.get("dns_v4_1", raw.get("dns_server1", raw.get("other_dns", ""))),
+                raw.get(
+                    "dns_v4_1",
+                    raw.get(
+                        "dns_server1",
+                        raw.get("other_dns", totr64_stats.get("totr64_dns_v4", "")),
+                    ),
+                ),
             ),
             dns_v6=raw.get("dns_v6", raw.get("dns_v6_1", "")),
             gateway_ip_v4=raw.get("gateway_ip_v4", raw.get("ip_gateway", "")),
