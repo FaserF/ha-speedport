@@ -130,6 +130,7 @@ async def test_get_all_data_fallback():
             return mock_empty_list
 
         session.get = MagicMock(side_effect=mock_get)  # type: ignore[method-assign]
+        session.post = MagicMock(return_value=mock_empty_list)  # type: ignore[method-assign]
 
         data = await client.get_all_data()
         assert data.device_name == "Speedport W 724V"
@@ -270,6 +271,7 @@ async def test_modern_ip_data():
             return mock_empty
 
         session.get = MagicMock(side_effect=mock_get_handler)  # type: ignore[method-assign]
+        session.post = MagicMock(return_value=mock_empty)  # type: ignore[method-assign]
 
         data = await client.get_all_data()
         assert data.public_ip_v4 == "93.184.216.34"
