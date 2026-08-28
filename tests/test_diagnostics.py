@@ -109,6 +109,9 @@ async def test_diagnostics(hass: HomeAssistant):
     assert router_info["hybrid_tunnel"] is True
     assert router_info["connected_devices_count"] == 1
     assert router_info["calls_count"] == 1
+    assert router_info["public_ip_v4"] == "**REDACTED**"
+    assert router_info["public_ip_v6"] == "**REDACTED**"
+    assert router_info["dns_v4"] == "**REDACTED**"
 
     # Check redactions in entry data
     assert diag["entry"]["data"]["password"] == "**REDACTED**"

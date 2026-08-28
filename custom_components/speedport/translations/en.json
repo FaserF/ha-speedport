@@ -63,7 +63,11 @@
       "ex5g_freq_5g": {"name": "5G Frequency"},
       "ex5g_signal_lte": {"name": "LTE Signal Strength"},
       "ex5g_freq_lte": {"name": "LTE Frequency"},
-      "calls": {"name": "Call List"}
+      "calls": {"name": "Call List"},
+      "bytes_received": {"name": "Total Data Received"},
+      "bytes_sent": {"name": "Total Data Sent"},
+      "bandwidth_download": {"name": "Download Bandwidth"},
+      "bandwidth_upload": {"name": "Upload Bandwidth"}
     },
     "binary_sensor": {
       "online": {"name": "Internet Connection"},

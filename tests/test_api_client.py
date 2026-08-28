@@ -1,6 +1,4 @@
-"""Tests for the Speedport API client."""
-
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
@@ -276,3 +274,79 @@ async def test_modern_ip_data():
         data = await client.get_all_data()
         assert data.public_ip_v4 == "93.184.216.34"
         assert data.public_ip_v6 == "2001:db8::1"
+
+
+@pytest.mark.asyncio
+async def test_totr64_stats():
+    """Test ToTR64 SOAP traffic & bandwidth counter retrieval."""
+    async with aiohttp.ClientSession() as session:
+        client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
+
+        soap_response_1 = """<?xml version="1.0" encoding="UTF-8"?>
+<soap-env:Envelope xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap-env:Body>
+    <cwmp:GetParameterValuesResponse xmlns:cwmp="urn:dslforum-org:cwmp-1-0">
+      <ParameterList>
+        <ParameterValueStruct>
+          <Name>Device.IP.Interface.5.Stats.BytesReceived</Name>
+          <Value xsi:type="xsd:unsignedLong">10000000</Value>
+        </ParameterValueStruct>
+        <ParameterValueStruct>
+          <Name>Device.IP.Interface.5.Stats.BytesSent</Name>
+          <Value xsi:type="xsd:unsignedLong">5000000</Value>
+        </ParameterValueStruct>
+      </ParameterList>
+    </cwmp:GetParameterValuesResponse>
+  </soap-env:Body>
+</soap-env:Envelope>"""
+
+        soap_response_2 = """<?xml version="1.0" encoding="UTF-8"?>
+<soap-env:Envelope xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap-env:Body>
+    <cwmp:GetParameterValuesResponse xmlns:cwmp="urn:dslforum-org:cwmp-1-0">
+      <ParameterList>
+        <ParameterValueStruct>
+          <Name>Device.IP.Interface.5.Stats.BytesReceived</Name>
+          <Value xsi:type="xsd:unsignedLong">11250000</Value>
+        </ParameterValueStruct>
+        <ParameterValueStruct>
+          <Name>Device.IP.Interface.5.Stats.BytesSent</Name>
+          <Value xsi:type="xsd:unsignedLong">5625000</Value>
+        </ParameterValueStruct>
+      </ParameterList>
+    </cwmp:GetParameterValuesResponse>
+  </soap-env:Body>
+</soap-env:Envelope>"""
+
+        mock_post_1 = MagicMock()
+        mock_post_1.text = AsyncMock(return_value=soap_response_1)
+        mock_post_1.__aenter__ = AsyncMock(return_value=mock_post_1)
+        mock_post_1.__aexit__ = AsyncMock(return_value=None)
+
+        session.post = MagicMock(return_value=mock_post_1)  # type: ignore[method-assign]
+
+        # First sample
+        with patch("custom_components.speedport.api.time.time", return_value=100.0):
+            stats1 = await client._get_totr64_stats()
+            assert stats1["bytes_received"] == 10000000
+            assert stats1["bytes_sent"] == 5000000
+            assert "bandwidth_download" not in stats1
+
+        # Second sample after exactly 1.0s
+        mock_post_2 = MagicMock()
+        mock_post_2.text = AsyncMock(return_value=soap_response_2)
+        mock_post_2.__aenter__ = AsyncMock(return_value=mock_post_2)
+        mock_post_2.__aexit__ = AsyncMock(return_value=None)
+
+        session.post = MagicMock(return_value=mock_post_2)  # type: ignore[method-assign]
+
+        with patch("custom_components.speedport.api.time.time", return_value=101.0):
+            stats2 = await client._get_totr64_stats()
+            assert stats2["bytes_received"] == 11250000
+            assert stats2["bytes_sent"] == 5625000
+            assert (
+                stats2["bandwidth_download"] == 10.0
+            )  # 1,250,000 bytes * 8 / 1s / 1,000,000 = 10.0 Mbit/s
+            assert (
+                stats2["bandwidth_upload"] == 5.0
+            )  # 625,000 bytes * 8 / 1s / 1,000,000 = 5.0 Mbit/s

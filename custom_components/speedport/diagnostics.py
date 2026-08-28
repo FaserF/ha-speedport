@@ -172,6 +172,13 @@ async def async_get_config_entry_diagnostics(
             "ex5g_freq_5g": data.ex5g_freq_5g,
             "ex5g_signal_lte": data.ex5g_signal_lte,
             "ex5g_freq_lte": data.ex5g_freq_lte,
+            "public_ip_v4": data.public_ip_v4,
+            "public_ip_v6": data.public_ip_v6,
+            "dns_v4": data.dns_v4,
+            "bytes_received": data.bytes_received,
+            "bytes_sent": data.bytes_sent,
+            "bandwidth_download": data.bandwidth_download,
+            "bandwidth_upload": data.bandwidth_upload,
             "update_available": data.update_available,
             "latest_version": data.latest_version,
             "connected_devices_count": len(data.devices),
@@ -185,7 +192,7 @@ async def async_get_config_entry_diagnostics(
 
     diagnostics_data: dict[str, Any] = {
         "entry": async_redact_data(entry.as_dict(), TO_REDACT),
-        "router_info": router_info,
+        "router_info": async_redact_data(router_info, TO_REDACT),
         "data": async_redact_data(raw_data, TO_REDACT),
         "update_info": async_redact_data(update_info, TO_REDACT),
         "devices": [async_redact_data(dev, TO_REDACT) for dev in devices],

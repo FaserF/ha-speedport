@@ -16,6 +16,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     UnitOfDataRate,
+    UnitOfInformation,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -190,6 +191,46 @@ SENSORS: tuple[SpeedportSensorEntityDescription, ...] = (
         name="Call List",
         icon="mdi:phone-log",
         data_key="calls",
+    ),
+    SpeedportSensorEntityDescription(
+        key="bytes_received",
+        translation_key="bytes_received",
+        name="Total Data Received",
+        icon="mdi:download-network-outline",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        data_key="bytes_received",
+    ),
+    SpeedportSensorEntityDescription(
+        key="bytes_sent",
+        translation_key="bytes_sent",
+        name="Total Data Sent",
+        icon="mdi:upload-network-outline",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        data_key="bytes_sent",
+    ),
+    SpeedportSensorEntityDescription(
+        key="bandwidth_download",
+        translation_key="bandwidth_download",
+        name="Download Bandwidth",
+        icon="mdi:download-network",
+        device_class=SensorDeviceClass.DATA_RATE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfDataRate.MEGABITS_PER_SECOND,
+        data_key="bandwidth_download",
+    ),
+    SpeedportSensorEntityDescription(
+        key="bandwidth_upload",
+        translation_key="bandwidth_upload",
+        name="Upload Bandwidth",
+        icon="mdi:upload-network",
+        device_class=SensorDeviceClass.DATA_RATE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfDataRate.MEGABITS_PER_SECOND,
+        data_key="bandwidth_upload",
     ),
 )
 

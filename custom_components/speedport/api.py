@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from contextlib import suppress
 from dataclasses import dataclass, field
 from hashlib import md5, sha256
@@ -242,6 +243,12 @@ class SpeedportData:
     latest_version: str | None = None
     update_info: dict[str, Any] = field(default_factory=dict)
 
+    # Traffic & Bandwidth (ToTR64 / CWMP)
+    bytes_received: int | None = None
+    bytes_sent: int | None = None
+    bandwidth_download: float | None = None
+    bandwidth_upload: float | None = None
+
     # Raw data
     raw: dict[str, Any] = field(default_factory=dict)
 
@@ -300,6 +307,13 @@ class SpeedportClient:
         self._cached_httoken: str | None = (
             None  # Cached CSRF token (modern) to avoid per-request HTML page loads
         )
+        # ToTR64 / CWMP Byte counter & bandwidth state
+        self._totr64_enabled: bool = True
+        self._totr64_backoff_until: float = 0.0
+        self._totr64_interface_idx: int | None = None
+        self._prev_bytes_received: int | None = None
+        self._prev_bytes_sent: int | None = None
+        self._prev_bytes_time: float | None = None
 
     async def logout(self) -> None:
         """Log out from the Speedport."""
@@ -912,13 +926,143 @@ class SpeedportClient:
             except Exception as exc:
                 _LOGGER.debug("Failed to fetch %s: %s", device_path, exc)
 
-        return self._build_data(raw, devices_raw)
+        # ToTR64 / CWMP Traffic & Bandwidth stats (Port 5438)
+        totr64_stats = await self._get_totr64_stats()
+
+        return self._build_data(raw, devices_raw, totr64_stats=totr64_stats)
+
+    async def _get_totr64_stats(self) -> dict[str, Any]:
+        """Fetch byte counters from ToTR64 SOAP endpoint (Port 5438)."""
+        now = time.time()
+        if not self._totr64_enabled or now < self._totr64_backoff_until:
+            return {}
+
+        headers = {
+            "Content-Type": "text/xml; charset=utf-8",
+            "SOAPAction": "urn:telekom-de:device:TO_InternetGatewayDevice:2#GetParameterValues",
+            "Connection": "close",
+        }
+
+        # Try cached interface index first, or default to 5 (BONDING/habond), fallback candidates
+        candidate_indices: list[int] = []
+        if self._totr64_interface_idx is not None:
+            candidate_indices.append(self._totr64_interface_idx)
+        for idx in (5, 1, 2, 3, 4, 6):
+            if idx not in candidate_indices:
+                candidate_indices.append(idx)
+
+        url = f"http://{self._host}:5438/"
+
+        for idx in candidate_indices:
+            body = f"""<soap-env:Envelope
+    xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:cwmp="urn:telekom-de.totr64-2-n">
+  <soap-env:Body>
+    <cwmp:GetParameterValues xmlns:cwmp="urn:dslforum-org:cwmp-1-0">
+      <cwmp:ParameterNames length="2">
+        <xsd:string>Device.IP.Interface.{idx}.Stats.BytesReceived</xsd:string>
+        <xsd:string>Device.IP.Interface.{idx}.Stats.BytesSent</xsd:string>
+      </cwmp:ParameterNames>
+    </cwmp:GetParameterValues>
+  </soap-env:Body>
+</soap-env:Envelope>"""
+            try:
+                async with self._session.post(
+                    url,
+                    data=body,
+                    headers=headers,
+                    ssl=False,
+                    timeout=aiohttp.ClientTimeout(total=3),
+                ) as resp:
+                    text = await resp.text(errors="replace")
+
+                    if "9801" in text:
+                        _LOGGER.debug(
+                            "ToTR64 SOAP fault 9801 (session active), backing off for 30s"
+                        )
+                        self._totr64_backoff_until = now + 30.0
+                        return {}
+
+                    # Parse BytesReceived and BytesSent
+                    rx_match = re.search(
+                        r"BytesReceived</Name>\s*<Value[^>]*>(\d+)</Value>", text
+                    )
+                    if not rx_match:
+                        rx_match = re.search(
+                            r"Device\.IP\.Interface\.\d+\.Stats\.BytesReceived.*?(\d+)",
+                            text,
+                            re.DOTALL,
+                        )
+
+                    tx_match = re.search(
+                        r"BytesSent</Name>\s*<Value[^>]*>(\d+)</Value>", text
+                    )
+                    if not tx_match:
+                        tx_match = re.search(
+                            r"Device\.IP\.Interface\.\d+\.Stats\.BytesSent.*?(\d+)",
+                            text,
+                            re.DOTALL,
+                        )
+
+                    if rx_match and tx_match:
+                        rx_bytes = int(rx_match.group(1))
+                        tx_bytes = int(tx_match.group(1))
+                        self._totr64_interface_idx = idx
+
+                        stats: dict[str, Any] = {
+                            "bytes_received": rx_bytes,
+                            "bytes_sent": tx_bytes,
+                        }
+
+                        # Compute bandwidth rates if we have previous sample
+                        if (
+                            self._prev_bytes_received is not None
+                            and self._prev_bytes_sent is not None
+                            and self._prev_bytes_time is not None
+                        ):
+                            elapsed = now - self._prev_bytes_time
+                            if elapsed > 0.5:
+                                delta_rx = rx_bytes - self._prev_bytes_received
+                                delta_tx = tx_bytes - self._prev_bytes_sent
+
+                                # Check for counter reset / reboot (delta >= 0)
+                                if delta_rx >= 0 and delta_tx >= 0:
+                                    # Mbit/s = (bytes * 8) / (elapsed * 1_000_000)
+                                    stats["bandwidth_download"] = round(
+                                        (delta_rx * 8) / (elapsed * 1_000_000), 3
+                                    )
+                                    stats["bandwidth_upload"] = round(
+                                        (delta_tx * 8) / (elapsed * 1_000_000), 3
+                                    )
+
+                        self._prev_bytes_received = rx_bytes
+                        self._prev_bytes_sent = tx_bytes
+                        self._prev_bytes_time = now
+                        return stats
+
+            except aiohttp.ClientConnectorError:
+                # Port 5438 is closed / not supported on older models like W 724V
+                _LOGGER.debug(
+                    "ToTR64 port 5438 not available on %s, disabling", self._host
+                )
+                self._totr64_enabled = False
+                return {}
+            except Exception as exc:
+                _LOGGER.debug("ToTR64 stats fetch failed for index %d: %s", idx, exc)
+
+        return {}
 
     def _build_data(
-        self, raw: dict[str, Any], devices_raw: dict[str, Any]
+        self,
+        raw: dict[str, Any],
+        devices_raw: dict[str, Any],
+        totr64_stats: dict[str, Any] | None = None,
     ) -> SpeedportData:
         """Build a SpeedportData object from raw API dictionaries."""
         all_data = {**devices_raw, **raw}
+        totr64_stats = totr64_stats or {}
 
         def _int(val: Any, default: int | None = None) -> int | None:
             try:
@@ -1129,6 +1273,10 @@ class SpeedportClient:
             ex5g_freq_5g=raw.get("ex5g_freq_5g", ""),
             ex5g_signal_lte=raw.get("ex5g_signal_lte", ""),
             ex5g_freq_lte=raw.get("ex5g_freq_lte", ""),
+            bytes_received=totr64_stats.get("bytes_received"),
+            bytes_sent=totr64_stats.get("bytes_sent"),
+            bandwidth_download=totr64_stats.get("bandwidth_download"),
+            bandwidth_upload=totr64_stats.get("bandwidth_upload"),
             devices=unique_devices,
             calls=raw.get("calls", []),
             raw=raw,
