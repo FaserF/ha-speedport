@@ -20,7 +20,7 @@ body:
     attributes:
       label: Integration Version
       description: Which version of this integration are you using?
-      placeholder: v1.1.7b0
+      placeholder: v1.1.7b1
     validations:
       required: true
 
