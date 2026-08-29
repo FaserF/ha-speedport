@@ -86,7 +86,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
+        entry_data = hass.data[DOMAIN].pop(entry.entry_id, None)
+        if entry_data and DATA_CLIENT in entry_data:
+            client: SpeedportClient = entry_data[DATA_CLIENT]
+            await client.close()
+        if not hass.data[DOMAIN]:
+            for service in (
+                SERVICE_REBOOT,
+                SERVICE_RECONNECT,
+                SERVICE_WPS_ON,
+                SERVICE_GET_RAW_DATA,
+                SERVICE_GENERATE_REPORT,
+            ):
+                hass.services.async_remove(DOMAIN, service)
     return unload_ok
 
 

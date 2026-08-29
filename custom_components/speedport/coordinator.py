@@ -8,6 +8,7 @@ from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -67,7 +68,9 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
                 await self.client.login()
                 data = await self.client.get_all_data()
             except SpeedportAuthError as retry_err:
-                raise UpdateFailed(f"Authentication error: {retry_err}") from retry_err
+                raise ConfigEntryAuthFailed(
+                    f"Authentication error: {retry_err}"
+                ) from retry_err
         except (SpeedportConnectionError, Exception) as err:
             raise UpdateFailed(f"Error fetching Speedport data: {err}") from err
 

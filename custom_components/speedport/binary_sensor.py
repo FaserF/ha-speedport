@@ -141,11 +141,6 @@ class SpeedportBinarySensor(SpeedportEntity, BinarySensorEntity):
         )
 
     @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return self.coordinator.data is not None
-
-    @property
     def is_on(self) -> bool | None:
         """Return True if the binary sensor is on."""
         data = self.coordinator.data

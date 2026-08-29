@@ -159,6 +159,58 @@ class SpeedportConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
             errors=errors,
         )
 
+    async def async_step_reauth(
+        self, entry_data: dict[str, Any]
+    ) -> config_entries.ConfigFlowResult:
+        """Handle reauthentication upon auth failure."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Confirm reauthentication with new password."""
+        errors: dict[str, str] = {}
+        reauth_entry = self._get_reauth_entry()
+
+        if user_input is not None:
+            host = reauth_entry.data.get(CONF_HOST, DEFAULT_HOST)
+            use_https = reauth_entry.data.get(CONF_USE_HTTPS, False)
+            password = user_input[CONF_PASSWORD]
+
+            session = aiohttp_client.async_create_clientsession(self.hass)
+            client = SpeedportClient(
+                host=host, password=password, session=session, use_https=use_https
+            )
+
+            try:
+                await client.login()
+            except SpeedportAuthError:
+                errors["base"] = "invalid_auth"
+            except (SpeedportConnectionError, Exception) as err:
+                _LOGGER.exception("Unexpected error connecting to Speedport: %s", err)
+                errors["base"] = "cannot_connect"
+            else:
+                return self.async_update_reload_and_abort(
+                    reauth_entry,
+                    data={
+                        **reauth_entry.data,
+                        CONF_PASSWORD: password,
+                    },
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_PASSWORD): str,
+                }
+            ),
+            description_placeholders={
+                CONF_HOST: reauth_entry.data.get(CONF_HOST, DEFAULT_HOST)
+            },
+            errors=errors,
+        )
+
     @staticmethod
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,

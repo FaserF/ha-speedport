@@ -120,7 +120,7 @@ def _parse_response(text: str, key: str | None = None) -> dict[str, Any]:
         if isinstance(data, dict):
             return data
     except json.JSONDecodeError as exc:
-        _LOGGER.debug("Failed to parse JSON response: %s | text: %s", exc, text[:200])
+        _LOGGER.debug("Failed to parse JSON response: %s", exc)
     return {}
 
 
@@ -365,6 +365,12 @@ class SpeedportClient:
                             with suppress(Exception):
                                 proto.close()
 
+    async def close(self) -> None:
+        """Close the client session and resources."""
+        await self.logout()
+        if self._session and not self._session.closed:
+            await self._session.close()
+
     @property
     def is_logged_in(self) -> bool:
         """Return True if authenticated."""
@@ -421,7 +427,7 @@ class SpeedportClient:
                     r"(?:_httoken|httoken|_tn)\s*=\s*['\"]?(\d+)", text
                 ):
                     token = match.group(1)
-                    _LOGGER.debug("Found httoken: %s from %s", token, page_url)
+                    _LOGGER.debug("Found httoken from %s", page_url)
                     if not no_cache:
                         self._cached_httoken = token
                     return token
@@ -475,10 +481,6 @@ class SpeedportClient:
                     # Invalidate cached token but keep session alive
                     self._cached_httoken = None
                     return {}
-
-                _LOGGER.debug(
-                    "Raw response from %s (first 300 chars): %s", path, text[:300]
-                )
 
                 if self._encrypted_mode is None:
                     # Detect mode on first request: if it's hex-only, it's encrypted
@@ -765,146 +767,143 @@ class SpeedportClient:
         )
 
         # Auth required for the rest
-        try:
-            await self._ensure_auth()
+        await self._ensure_auth()
 
-            if is_legacy_w724v:
-                # For W 724V: fetch Status.json again after auth (session cookie may unlock more fields)
-                _LOGGER.debug(
-                    "Legacy W 724V detected — fetching authenticated Status.json"
-                )
+        if is_legacy_w724v:
+            # For W 724V: fetch Status.json again after auth (session cookie may unlock more fields)
+            _LOGGER.debug("Legacy W 724V detected — fetching authenticated Status.json")
+            try:
                 status_auth = await self._get_json(
                     "data/Status.json", referer="html/login/index.html"
                 )
                 raw.update(status_auth)
+            except Exception as exc:
+                _LOGGER.debug("Status.json auth fetch failed (W 724V): %s", exc)
 
-                # W 724V fallback endpoints for WLAN and DSL details concurrently
-                legacy_eps = [
-                    ("data/WLAN.json", "html/content/network/wlan_basic.html"),
-                    ("data/WLANBasic.json", "html/content/network/wlan_basic.html"),
-                    (
-                        "data/WLANSettings.json",
-                        "html/content/network/wlan_settings.html",
-                    ),
-                    ("data/WLANGuest.json", "html/content/network/wlan_guest.html"),
-                    ("data/LAN.json", "html/content/network/lan.html"),
-                    ("data/IPData.json", "html/content/internet/con_ipdata.html"),
-                    ("data/Internet.json", "html/content/internet/con_ipdata.html"),
-                    ("data/PhoneCalls.json", "html/content/phone/phone_list.html"),
-                ]
-                legacy_results = await asyncio.gather(
-                    *(self._get_json(ep, referer=ref) for ep, ref in legacy_eps),
-                    return_exceptions=True,
-                )
-                for res in legacy_results:
-                    if isinstance(res, dict):
-                        raw.update(res)
+            # W 724V fallback endpoints for WLAN and DSL details concurrently
+            legacy_eps = [
+                ("data/WLAN.json", "html/content/network/wlan_basic.html"),
+                ("data/WLANBasic.json", "html/content/network/wlan_basic.html"),
+                (
+                    "data/WLANSettings.json",
+                    "html/content/network/wlan_settings.html",
+                ),
+                ("data/WLANGuest.json", "html/content/network/wlan_guest.html"),
+                ("data/LAN.json", "html/content/network/lan.html"),
+                ("data/IPData.json", "html/content/internet/con_ipdata.html"),
+                ("data/Internet.json", "html/content/internet/con_ipdata.html"),
+                ("data/PhoneCalls.json", "html/content/phone/phone_list.html"),
+            ]
+            legacy_results = await asyncio.gather(
+                *(self._get_json(ep, referer=ref) for ep, ref in legacy_eps),
+                return_exceptions=True,
+            )
+            for res in legacy_results:
+                if isinstance(res, dict):
+                    raw.update(res)
 
-                # Overview last (may return partial data on W 724V — don't override good values)
-                try:
-                    overview = await self._get_json(
-                        "data/Overview.json",
-                        referer="html/content/overview/index.html",
-                    )
-                    for k, v in overview.items():
-                        if k not in raw or not raw[k]:
-                            raw[k] = v
-                except Exception as exc:
-                    _LOGGER.debug("Overview.json fetch failed (W 724V): %s", exc)
-
-            else:
-                # Modern models (Smart 3, Smart 4, Smart 4R, Pro):
-                # The router web server handles only ONE authenticated request at a time
-                # with the same session token — parallel requests all return "Session expired".
-                # We fetch endpoints sequentially; the small latency cost (~200 ms) is
-                # far outweighed by eliminating the session conflicts that lock out the
-                # Telekom Zuhause / MeinMagenta apps.
-                for path, referer, auth in (
-                    ("data/Overview.json", "html/content/overview/index.html", False),
-                    (
-                        "data/SecureStatus.json",
-                        "html/content/overview/index.html",
-                        True,
-                    ),
-                    (
-                        "data/WLANBasic.json",
-                        "html/content/network/wlan_basic.html",
-                        False,
-                    ),
-                    (
-                        "data/WLANSettings.json",
-                        "html/content/network/wlan_settings.html",
-                        False,
-                    ),
-                    ("data/LAN.json", "html/content/network/lan.html", False),
-                    # IPData.json is encrypted with DEFAULT_KEY on modern routers
-                    # (not with the session login_key), so auth=False is correct here.
-                    # Using auth=True would pick _login_key for decryption and produce
-                    # garbage/empty output on Speedport Smart 4 Typ B.
-                    (
-                        "data/IPData.json",
-                        "html/content/internet/con_ipdata.html",
-                        False,
-                    ),
-                    # data/Internet.json is an alternative endpoint used on some firmwares
-                    (
-                        "data/Internet.json",
-                        "html/content/internet/con_ipdata.html",
-                        False,
-                    ),
-                    (
-                        "data/PhoneCalls.json",
-                        "html/content/phone/phone_list.html",
-                        True,
-                    ),
-                ):
-                    try:
-                        result = await self._get_json(path, referer=referer, auth=auth)
-                        if result:
-                            raw.update(result)
-                    except Exception as exc:
-                        _LOGGER.debug("Failed to fetch %s: %s", path, exc)
-
-                # IPData fallback: if we still didn't get any public IP field, try
-                # SecureStatus with auth=True as last resort — some firmwares include
-                # IP addresses there.
-                _ip_fields = (
-                    "public_ip_v4",
-                    "ip_extern",
-                    "srv_ipv4_wan",
-                    "wan_ip4_addr",
-                    "wan_ip_address",
-                    "wan_ipv4",
-                    "onlineipv4",
-                    "other_ip",
-                    "ip_v4",
-                )
-                if not any(raw.get(f) for f in _ip_fields):
-                    try:
-                        ip_fallback = await self._get_json(
-                            "data/IPData.json",
-                            referer="html/content/internet/con_ipdata.html",
-                            auth=True,
-                        )
-                        if ip_fallback:
-                            raw.update(ip_fallback)
-                    except Exception as exc:
-                        _LOGGER.debug("IPData auth fallback failed: %s", exc)
-
-            # Heartbeat: Login.json GET fills missing fields regardless of model
+            # Overview last (may return partial data on W 724V — don't override good values)
             try:
-                heartbeat = await self._get_json(
-                    "data/Login.json",
+                overview = await self._get_json(
+                    "data/Overview.json",
                     referer="html/content/overview/index.html",
                 )
-                for k, v in heartbeat.items():
+                for k, v in overview.items():
                     if k not in raw or not raw[k]:
                         raw[k] = v
             except Exception as exc:
-                _LOGGER.debug("Login.json heartbeat failed: %s", exc)
+                _LOGGER.debug("Overview.json fetch failed (W 724V): %s", exc)
 
+        else:
+            # Modern models (Smart 3, Smart 4, Smart 4R, Pro):
+            # The router web server handles only ONE authenticated request at a time
+            # with the same session token — parallel requests all return "Session expired".
+            # We fetch endpoints sequentially; the small latency cost (~200 ms) is
+            # far outweighed by eliminating the session conflicts that lock out the
+            # Telekom Zuhause / MeinMagenta apps.
+            for path, referer, auth in (
+                ("data/Overview.json", "html/content/overview/index.html", False),
+                (
+                    "data/SecureStatus.json",
+                    "html/content/overview/index.html",
+                    True,
+                ),
+                (
+                    "data/WLANBasic.json",
+                    "html/content/network/wlan_basic.html",
+                    False,
+                ),
+                (
+                    "data/WLANSettings.json",
+                    "html/content/network/wlan_settings.html",
+                    False,
+                ),
+                ("data/LAN.json", "html/content/network/lan.html", False),
+                # IPData.json is encrypted with DEFAULT_KEY on modern routers
+                # (not with the session login_key), so auth=False is correct here.
+                # Using auth=True would pick _login_key for decryption and produce
+                # garbage/empty output on Speedport Smart 4 Typ B.
+                (
+                    "data/IPData.json",
+                    "html/content/internet/con_ipdata.html",
+                    False,
+                ),
+                # data/Internet.json is an alternative endpoint used on some firmwares
+                (
+                    "data/Internet.json",
+                    "html/content/internet/con_ipdata.html",
+                    False,
+                ),
+                (
+                    "data/PhoneCalls.json",
+                    "html/content/phone/phone_list.html",
+                    True,
+                ),
+            ):
+                try:
+                    result = await self._get_json(path, referer=referer, auth=auth)
+                    if result:
+                        raw.update(result)
+                except Exception as exc:
+                    _LOGGER.debug("Failed to fetch %s: %s", path, exc)
+
+            # IPData fallback: if we still didn't get any public IP field, try
+            # SecureStatus with auth=True as last resort — some firmwares include
+            # IP addresses there.
+            _ip_fields = (
+                "public_ip_v4",
+                "ip_extern",
+                "srv_ipv4_wan",
+                "wan_ip4_addr",
+                "wan_ip_address",
+                "wan_ipv4",
+                "onlineipv4",
+                "other_ip",
+                "ip_v4",
+            )
+            if not any(raw.get(f) for f in _ip_fields):
+                try:
+                    ip_fallback = await self._get_json(
+                        "data/IPData.json",
+                        referer="html/content/internet/con_ipdata.html",
+                        auth=True,
+                    )
+                    if ip_fallback:
+                        raw.update(ip_fallback)
+                except Exception as exc:
+                    _LOGGER.debug("IPData auth fallback failed: %s", exc)
+
+        # Heartbeat: Login.json GET fills missing fields regardless of model
+        try:
+            heartbeat = await self._get_json(
+                "data/Login.json",
+                referer="html/content/overview/index.html",
+            )
+            for k, v in heartbeat.items():
+                if k not in raw or not raw[k]:
+                    raw[k] = v
         except Exception as exc:
-            _LOGGER.debug("Error fetching authenticated data: %s", exc)
+            _LOGGER.debug("Login.json heartbeat failed: %s", exc)
 
         _LOGGER.debug("Merged raw keys: %s", list(raw.keys()))
 

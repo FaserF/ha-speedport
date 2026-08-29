@@ -46,4 +46,4 @@ class SpeedportEntity:
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
-        return self.coordinator.data is not None
+        return self.coordinator.last_update_success

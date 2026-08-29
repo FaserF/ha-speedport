@@ -48,6 +48,13 @@ class SpeedportUpdateEntity(SpeedportEntity, UpdateEntity):
         assert coordinator.config_entry is not None
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_update"
 
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to hass."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self.async_write_ha_state)
+        )
+
     @property
     def installed_version(self) -> str | None:
         """Return the installed version."""

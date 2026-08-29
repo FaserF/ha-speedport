@@ -103,7 +103,7 @@ Most Telekom Speedport routers are closed systems with limited external access. 
 
 ## 🛠️ Options
 
-Click **Configure** on the integration page to adjust the **Update Interval** (default: 30 seconds), enable/disable device tracking, or configure the logout behavior.
+Click **Configure** on the integration page to adjust the **Update Interval** (default: 60 seconds), enable/disable device tracking, or configure the logout behavior.
 
 ## ⚠️ Troubleshooting & Known Limitations
 

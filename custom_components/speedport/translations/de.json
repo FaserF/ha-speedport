@@ -17,6 +17,13 @@
           "host": "Host oder IP-Adresse",
           "password": "Router-Passwort"
         }
+      },
+      "reauth_confirm": {
+        "title": "Telekom Speedport erneut authentifizieren",
+        "description": "Das Passwort für deinen Telekom Speedport Router unter {host} ist ungültig. Bitte gib das neue Passwort ein.",
+        "data": {
+          "password": "Router-Passwort"
+        }
       }
     },
     "error": {
@@ -26,7 +33,8 @@
     },
     "abort": {
       "already_configured": "Dieser Speedport Router ist bereits konfiguriert",
-      "reconfigure_successful": "Neukonfiguration erfolgreich"
+      "reconfigure_successful": "Neukonfiguration erfolgreich",
+      "reauth_successful": "Erneute Authentifizierung erfolgreich"
     }
   },
   "options": {

@@ -17,6 +17,13 @@
           "host": "Host or IP address",
           "password": "Router password"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Telekom Speedport",
+        "description": "The password for your Telekom Speedport router at {host} is invalid. Please enter the new password.",
+        "data": {
+          "password": "Router password"
+        }
       }
     },
     "error": {
@@ -26,7 +33,8 @@
     },
     "abort": {
       "already_configured": "This Speedport router is already configured",
-      "reconfigure_successful": "Reconfiguration successful"
+      "reconfigure_successful": "Reconfiguration successful",
+      "reauth_successful": "Re-authentication successful"
     }
   },
   "options": {
