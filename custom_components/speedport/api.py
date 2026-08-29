@@ -954,6 +954,8 @@ class SpeedportClient:
         url = f"http://{self._host}:5438/"
 
         for idx in candidate_indices:
+            # We query the exact 2 parameters that the CWMP schema expects.
+            # Querying more or nonexistent parameters causes CWMP server on Smart 4 to return empty / fault.
             body = f"""<soap-env:Envelope
     xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -961,13 +963,9 @@ class SpeedportClient:
     xmlns:cwmp="urn:telekom-de.totr64-2-n">
   <soap-env:Body>
     <cwmp:GetParameterValues xmlns:cwmp="urn:dslforum-org:cwmp-1-0">
-      <cwmp:ParameterNames length="6">
+      <cwmp:ParameterNames length="2">
         <xsd:string>Device.IP.Interface.{idx}.Stats.BytesReceived</xsd:string>
         <xsd:string>Device.IP.Interface.{idx}.Stats.BytesSent</xsd:string>
-        <xsd:string>Device.IP.Interface.{idx}.IPv4Address.1.IPAddress</xsd:string>
-        <xsd:string>Device.IP.Interface.{idx}.IPv6Address.1.IPAddress</xsd:string>
-        <xsd:string>Device.DNS.Client.Server.1.DNSServer</xsd:string>
-        <xsd:string>Device.IP.Interface.{idx}.IPv4Address.1.DNSServers</xsd:string>
       </cwmp:ParameterNames>
     </cwmp:GetParameterValues>
   </soap-env:Body>
