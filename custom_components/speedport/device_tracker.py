@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, cast
+from typing import Any
 
 from homeassistant.components.device_tracker import ScannerEntity, SourceType
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import WlanDevice
 from .const import CONF_ENABLE_DEVICE_TRACKER, DATA_COORDINATOR, DOMAIN
 from .coordinator import SpeedportDataCoordinator
-from .entity import SpeedportEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,6 +25,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Speedport device trackers."""
     if not entry.options.get(CONF_ENABLE_DEVICE_TRACKER, True):
+        _LOGGER.debug("Device tracker disabled in entry options for %s", entry.title)
         return
 
     coordinator: SpeedportDataCoordinator = hass.data[DOMAIN][entry.entry_id][
@@ -45,8 +44,14 @@ async def async_setup_entry(
             mac = device.mac.lower()
             if mac and mac not in tracked:
                 tracked.add(mac)
+                _LOGGER.debug(
+                    "Adding device tracker for %s (%s)",
+                    device.hostname or "unknown",
+                    mac,
+                )
                 new_entities.append(SpeedportDeviceTracker(coordinator, mac))
         if new_entities:
+            _LOGGER.debug("Adding %d new device tracker entities", len(new_entities))
             async_add_entities(new_entities)
 
     # Register callback to add new devices on each update
@@ -56,47 +61,30 @@ async def async_setup_entry(
     _add_new_devices()
 
 
-class SpeedportDeviceTracker(ScannerEntity, SpeedportEntity):
+class SpeedportDeviceTracker(
+    CoordinatorEntity[SpeedportDataCoordinator], ScannerEntity
+):
     """Speedport device tracker entity."""
+
+    _attr_has_entity_name = True
+    _attr_name = None
+    _attr_should_poll = False
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator: SpeedportDataCoordinator, mac: str) -> None:
         """Initialize the device tracker."""
         super().__init__(coordinator)
+        self.coordinator = coordinator
         self._mac = mac.lower()
-        config_entry = self.coordinator.config_entry
+        config_entry = coordinator.config_entry
         assert config_entry is not None
         self._attr_unique_id = f"{config_entry.entry_id}_tracker_{self._mac}"
-
-        device = self._get_device()
-        name = device.hostname if device and device.hostname else self._mac
-
-        cast(Any, self)._attr_device_info = DeviceInfo(
-            connections={(dr.CONNECTION_NETWORK_MAC, self._mac)},
-            identifiers={(DOMAIN, self._mac)},
-            name=name,
-            via_device=(DOMAIN, config_entry.entry_id),
-        )
-
-    async def async_added_to_hass(self) -> None:
-        """When entity is added to hass."""
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            self.coordinator.async_add_listener(self.async_write_ha_state)
-        )
 
     def _get_device(self) -> WlanDevice | None:
         """Get the tracked device from coordinator data."""
         if self.coordinator.data is None:
             return None
         return self.coordinator.data.get_device(self._mac)
-
-    @property
-    def name(self) -> str:
-        """Return the device name."""
-        device = self._get_device()
-        if device and device.hostname:
-            return device.hostname
-        return self._mac
 
     @property
     def is_connected(self) -> bool:

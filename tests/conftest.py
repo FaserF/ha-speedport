@@ -1,11 +1,24 @@
 """Pytest configuration and fixtures for the Speedport integration tests."""
 
+import asyncio
+import inspect
 import sys
 from dataclasses import dataclass
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+
+
+def pytest_pyfunc_call(pyfuncitem):
+    """Run async test functions."""
+    if inspect.iscoroutinefunction(pyfuncitem.obj):
+        asyncio.run(
+            pyfuncitem.obj(
+                *[pyfuncitem.funcargs[arg] for arg in pyfuncitem._fixtureinfo.argnames]
+            )
+        )
+        return True
 
 
 # Provide minimal real classes for common HA base classes to support dataclasses
@@ -105,11 +118,49 @@ create_mock_module(
     },
 )
 create_mock_module(
+    "homeassistant.components.device_tracker",
+    {
+        "ScannerEntity": MockEntity,
+        "SourceType": MagicMock(ROUTER="router"),
+    },
+)
+
+
+class MockCoordinatorEntity(MockEntity):
+    """Base class for mocked CoordinatorEntity."""
+
+    def __init__(self, coordinator, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.coordinator = coordinator
+        self.hass = getattr(coordinator, "hass", None)
+
+    def __class_getitem__(cls, item):
+        return cls
+
+    @property
+    def available(self) -> bool:
+        return getattr(self.coordinator, "last_update_success", True)
+
+
+create_mock_module(
     "homeassistant.helpers.update_coordinator",
     {
         "DataUpdateCoordinator": MockCoordinator,
-        "CoordinatorEntity": MockCoordinator,
+        "CoordinatorEntity": MockCoordinatorEntity,
         "UpdateFailed": Exception,
+    },
+)
+
+
+class MockSegnoQR:
+    def save(self, buf, kind="png", border=2, scale=10):
+        buf.write(b"\x89PNG\r\n\x1a\nfake_png_data")
+
+
+mock_segno = create_mock_module(
+    "segno",
+    {
+        "make": lambda s: MockSegnoQR(),
     },
 )
 
@@ -146,6 +197,15 @@ essential_modules = [
     "homeassistant.helpers.config_validation",
     "homeassistant.util",
 ]
+
+create_mock_module(
+    "homeassistant.helpers.device_registry",
+    {
+        "DeviceInfo": dict,
+        "CONNECTION_NETWORK_MAC": "mac",
+        "async_get": MagicMock(),
+    },
+)
 
 for mod in essential_modules:
     if mod not in sys.modules:

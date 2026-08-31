@@ -352,3 +352,31 @@ async def test_totr64_stats():
             assert (
                 stats2["bandwidth_upload"] == 5.0
             )  # 625,000 bytes * 8 / 1s / 1,000,000 = 5.0 Mbit/s
+
+
+@pytest.mark.asyncio
+async def test_encrypted_response_key_fallback():
+    """Test fallback key decryption when endpoint is encrypted with session key instead of default key."""
+    from custom_components.speedport.api import _encode
+
+    session_key = "11223344556677889900aabbccddeeff00112233445566778899aabbccddeeff"
+    payload = '[{"varid":"lan_ip","varvalue":"192.168.178.1"},{"varid":"homenetwork","varvalue":"online"}]'
+    encrypted_with_session_key = _encode(payload, session_key)
+
+    async with aiohttp.ClientSession() as session:
+        client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
+        client._encrypted_mode = True
+        client._login_key = session_key
+
+        mock_resp = MagicMock()
+        mock_resp.text = AsyncMock(return_value=encrypted_with_session_key)
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=None)
+
+        session.get = MagicMock(return_value=mock_resp)  # type: ignore[method-assign]
+
+        # Fetch with auth=False (which uses DEFAULT_KEY as primary key)
+        # Should gracefully fall back to _login_key and succeed!
+        data = await client._get_json("data/LAN.json", auth=False)
+        assert data.get("lan_ip") == "192.168.178.1"
+        assert data.get("homenetwork") == "online"

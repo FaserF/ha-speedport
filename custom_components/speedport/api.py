@@ -100,7 +100,9 @@ def _encode(data: str, key: str = DEFAULT_KEY) -> str:
     return ciphertext.hex() + tag.hex()
 
 
-def _parse_response(text: str, key: str | None = None) -> dict[str, Any]:
+def _parse_response(
+    text: str, key: str | None = None, fallback_key: str | None = None
+) -> dict[str, Any]:
     """Parse a response from the Speedport router (handles plain and encrypted)."""
     if not text or text.strip() in ("[]", ""):
         return {}
@@ -111,6 +113,10 @@ def _parse_response(text: str, key: str | None = None) -> dict[str, Any]:
         decoded = _decode(cleaned_text, key or DEFAULT_KEY)
         if isinstance(decoded, dict):
             return decoded
+        if fallback_key and fallback_key != (key or DEFAULT_KEY):
+            fallback_decoded = _decode(cleaned_text, fallback_key)
+            if isinstance(fallback_decoded, dict):
+                return fallback_decoded
         return {}
 
     try:
@@ -495,7 +501,12 @@ class SpeedportClient:
                 key = (
                     self._login_key if (auth and self._encrypted_mode) else DEFAULT_KEY
                 )
-                data = _parse_response(text, key)
+                fallback_key = (
+                    DEFAULT_KEY
+                    if (auth and self._encrypted_mode)
+                    else (self._login_key if self._encrypted_mode else None)
+                )
+                data = _parse_response(text, key=key, fallback_key=fallback_key)
 
                 _LOGGER.debug(
                     "Parsed %d keys from %s: %s",
@@ -547,6 +558,11 @@ class SpeedportClient:
         key = (
             self._login_key if (auth and self._encrypted_mode) else None
         ) or DEFAULT_KEY
+        fallback_key = (
+            DEFAULT_KEY
+            if (auth and self._encrypted_mode)
+            else (self._login_key if self._encrypted_mode else None)
+        )
 
         if self._encrypted_mode:
             body = _encode(body_str, key)
@@ -577,7 +593,7 @@ class SpeedportClient:
                     self._logged_in = False
                     return {}
 
-                return _parse_response(text, key)
+                return _parse_response(text, key=key, fallback_key=fallback_key)
         except aiohttp.ClientError as exc:
             raise SpeedportConnectionError(f"POST {url} failed: {exc}") from exc
 
