@@ -757,7 +757,13 @@ class SpeedportClient:
         """Fetch all available data from the router."""
         raw: dict[str, Any] = {}
 
-        # Public Status — always available, even without auth on W 724V.
+        # 1. ToTR64 / CWMP Traffic & Bandwidth stats (Port 5438)
+        # MUST be fetched BEFORE creating an authenticated Web UI session.
+        # The Smart 4R CWMP server returns SOAP fault 9801 ("Session active")
+        # if an active HTTP Web UI session is currently open.
+        totr64_stats = await self._get_totr64_stats()
+
+        # 2. Public Status — always available, even without auth on W 724V.
         # This gives us domain_name (e.g. "Speedport_W_724V_...") for model detection.
         try:
             status = await self._get_json("data/Status.json")
@@ -941,9 +947,6 @@ class SpeedportClient:
             except Exception as exc:
                 _LOGGER.debug("Failed to fetch %s: %s", device_path, exc)
 
-        # ToTR64 / CWMP Traffic & Bandwidth stats (Port 5438)
-        totr64_stats = await self._get_totr64_stats()
-
         return self._build_data(raw, devices_raw, totr64_stats=totr64_stats)
 
     async def _get_totr64_stats(self) -> dict[str, Any]:
@@ -962,15 +965,14 @@ class SpeedportClient:
         candidate_indices: list[int] = []
         if self._totr64_interface_idx is not None:
             candidate_indices.append(self._totr64_interface_idx)
-        for idx in (5, 1, 2, 3, 4, 6):
+        for idx in (5, 1, 2, 3, 4, 6, 7, 8):
             if idx not in candidate_indices:
                 candidate_indices.append(idx)
 
         url = f"http://{self._host}:5438/"
 
         for idx in candidate_indices:
-            # We query the exact 2 parameters that the CWMP schema expects.
-            # Querying more or nonexistent parameters causes CWMP server on Smart 4 to return empty / fault.
+            # We query the exact parameters that the CWMP schema expects for traffic counters.
             body = f"""<soap-env:Envelope
     xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -997,9 +999,9 @@ class SpeedportClient:
 
                     if "9801" in text:
                         _LOGGER.debug(
-                            "ToTR64 SOAP fault 9801 (session active), backing off for 30s"
+                            "ToTR64 SOAP fault 9801 (session active), backing off for 15s"
                         )
-                        self._totr64_backoff_until = now + 30.0
+                        self._totr64_backoff_until = now + 15.0
                         return {}
 
                     # Parse BytesReceived and BytesSent
