@@ -158,14 +158,21 @@ class WlanDevice:
     def from_dict(cls, data: dict[str, Any]) -> WlanDevice:
         """Create a WlanDevice from raw device API data."""
         return cls(
-            mac=data.get("mdevice_mac", data.get("device_mac", data.get("mac", ""))),
+            mac=data.get(
+                "mdevice_mac",
+                data.get("device_mac", data.get("mac_addr", data.get("mac", ""))),
+            ),
             hostname=data.get(
                 "mdevice_name",
                 data.get(
-                    "mdevice_hostname", data.get("device_name", data.get("name", ""))
+                    "mdevice_hostname",
+                    data.get("device_name", data.get("hostname", data.get("name", ""))),
                 ),
             ),
-            ip=data.get("mdevice_ipv4", data.get("device_ipv4", data.get("ip", ""))),
+            ip=data.get(
+                "mdevice_ipv4",
+                data.get("device_ipv4", data.get("ip_addr", data.get("ip", ""))),
+            ),
             speed=data.get("mdevice_speed", data.get("device_speed", "")),
             downspeed=data.get("mdevice_downspeed", data.get("device_downspeed", "")),
             upspeed=data.get("mdevice_upspeed", data.get("device_upspeed", "")),
@@ -310,9 +317,9 @@ class SpeedportClient:
         self._login_key: str | None = None  # Challenge key for modern models
         self._encrypted_mode: bool | None = None  # Detected on first request
         self._token: str | None = None  # httoken / _tn for legacy models
-        self._cached_httoken: str | None = (
-            None  # Cached CSRF token (modern) to avoid per-request HTML page loads
-        )
+        self._cached_httokens: dict[
+            str, str
+        ] = {}  # Cached CSRF tokens per page URL (modern) to avoid redundant HTML page loads
         # ToTR64 / CWMP Byte counter & bandwidth state
         self._totr64_enabled: bool = True
         self._totr64_backoff_until: float = 0.0
@@ -345,7 +352,7 @@ class SpeedportClient:
             self._logged_in = False
             self._login_key = None
             self._token = None
-            self._cached_httoken = None
+            self._cached_httokens.clear()
             if (
                 hasattr(self._session, "cookie_jar")
                 and self._session.cookie_jar is not None
@@ -405,15 +412,13 @@ class SpeedportClient:
     ) -> str:
         """Fetch a page and extract the httoken CSRF value (Legacy & Modern).
 
-        On modern models the token is cached after the first successful fetch
-        within a session, reducing HTML page loads from O(N endpoints) to O(1)
-        per poll cycle.  Pass force_refresh=True after a login to prime the cache.
-        Pass no_cache=True (e.g. for POST action commands) to always fetch fresh
-        from the given page without updating the poll-cycle cache.
+        Tokens are tied to their originating HTML page (Referer) by the router firmware.
+        We cache tokens per page URL to avoid redundant HTML page fetches while ensuring
+        the token always matches the Referer header expected by the router.
         """
-        # Return cached token if already present to avoid redundant HTML page fetches
-        if not force_refresh and not no_cache and self._cached_httoken:
-            return self._cached_httoken
+        # Return cached token if already present for this page to avoid redundant HTML page fetches
+        if not force_refresh and not no_cache and page_url in self._cached_httokens:
+            return self._cached_httokens[page_url]
 
         try:
             headers = {
@@ -433,13 +438,13 @@ class SpeedportClient:
                     r"(?:_httoken|httoken|_tn)\s*=\s*['\"]?(\d+)", text
                 ):
                     token = match.group(1)
-                    _LOGGER.debug("Found httoken from %s", page_url)
+                    _LOGGER.debug("Found httoken from %s: %s", page_url, token)
                     if not no_cache:
-                        self._cached_httoken = token
+                        self._cached_httokens[page_url] = token
                     return token
         except Exception as exc:
             _LOGGER.debug("Could not get httoken from %s: %s", page_url, exc)
-        return self._cached_httoken or ""
+        return self._cached_httokens.get(page_url, "")
 
     async def _get_json(
         self, path: str, referer: str = "", auth: bool = False
@@ -476,7 +481,7 @@ class SpeedportClient:
 
                 # Robust parsing: if it redirects to login, the token has expired.
                 # On modern routers (Smart 4R) the session cookie may still be valid,
-                # so we only invalidate the cached httoken rather than forcing a full
+                # so we only invalidate the cached tokens rather than forcing a full
                 # re-login on every poll cycle.
                 if (
                     "Document moved" in text
@@ -484,8 +489,8 @@ class SpeedportClient:
                     or "login_index_html" in text
                 ):
                     _LOGGER.debug("Session expired or redirected to login for %s", path)
-                    # Invalidate cached token but keep session alive
-                    self._cached_httoken = None
+                    # Invalidate cached tokens but keep session alive
+                    self._cached_httokens.clear()
                     return {}
 
                 if self._encrypted_mode is None:
@@ -589,7 +594,7 @@ class SpeedportClient:
                     _LOGGER.debug(
                         "POST session expired or redirected to login for %s", path
                     )
-                    self._cached_httoken = None
+                    self._cached_httokens.clear()
                     self._logged_in = False
                     return {}
 
@@ -929,20 +934,40 @@ class SpeedportClient:
 
         _LOGGER.debug("Merged raw keys: %s", list(raw.keys()))
 
-        # Devices — fetch sequentially to avoid session conflicts on modern routers.
-        # Try DeviceList first (most reliable); fall back to HomeNetwork then Modules.
+        # Devices — fetch sequentially with appropriate referers to avoid session conflicts.
         devices_raw: dict[str, Any] = {}
-        for device_path in (
-            "data/DeviceList.json",
-            "data/HomeNetwork.json",
-            "data/Modules.json",
+        for device_path, referer, auth in (
+            ("data/DeviceList.json", "html/content/network/devices.html", False),
+            ("data/DeviceList.json", "html/content/network/devices.html", True),
+            ("data/HomeNetwork.json", "html/content/network/homenetwork.html", False),
+            ("data/HomeNetwork.json", "html/content/network/homenetwork.html", True),
+            ("data/LAN.json", "html/content/network/lan.html", False),
+            ("data/Modules.json", "html/content/overview/index.html", False),
         ):
             try:
-                d_raw = await self._get_json(device_path)
+                d_raw = await self._get_json(device_path, referer=referer, auth=auth)
                 if isinstance(d_raw, dict) and d_raw:
                     devices_raw.update(d_raw)
-                    # If DeviceList gave us actual device data, skip the rest
-                    if device_path == "data/DeviceList.json" and d_raw:
+                    # Stop querying fallback endpoints if we already found actual per-device entries
+                    if any(
+                        k in d_raw and d_raw[k]
+                        for k in (
+                            "addmwlandevice",
+                            "addmwlandevice_5g",
+                            "addmwlan5device",
+                            "addmlandevice",
+                            "addmdevice",
+                            "wlandevice",
+                            "landevice",
+                            "device",
+                            "mdevice",
+                            "homenetwork",
+                            "lan1_device",
+                            "lan2_device",
+                            "lan3_device",
+                            "lan4_device",
+                        )
+                    ):
                         break
             except Exception as exc:
                 _LOGGER.debug("Failed to fetch %s: %s", device_path, exc)
@@ -1146,17 +1171,21 @@ class SpeedportClient:
         )
         for key in device_keys:
             entries = all_data.get(key, [])
-            if not isinstance(entries, list):
+            if isinstance(entries, dict):
                 entries = [entries]
+            elif not isinstance(entries, list):
+                continue
             for dev_entry in entries:
                 if isinstance(dev_entry, dict) and any(
                     k in dev_entry
                     for k in (
                         "mdevice_mac",
                         "device_mac",
+                        "mac_addr",
                         "mac",
                         "mdevice_name",
                         "device_name",
+                        "hostname",
                     )
                 ):
                     devices.append(WlanDevice.from_dict(dev_entry))
@@ -1168,6 +1197,8 @@ class SpeedportClient:
             if d.mac and d.mac.lower() not in seen_macs:
                 seen_macs.add(d.mac.lower())
                 unique_devices.append(d)
+
+        _LOGGER.debug("Parsed %d unique connected devices", len(unique_devices))
 
         # Extract firmware for legacy models (W 724V)
         firmware = str(raw.get("firmware_version", "")).strip()

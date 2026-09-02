@@ -380,3 +380,51 @@ async def test_encrypted_response_key_fallback():
         data = await client._get_json("data/LAN.json", auth=False)
         assert data.get("lan_ip") == "192.168.178.1"
         assert data.get("homenetwork") == "online"
+
+
+@pytest.mark.asyncio
+async def test_per_page_httoken_caching():
+    """Test that CSRF tokens are cached per HTML page URL."""
+    async with aiohttp.ClientSession() as session:
+        client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
+
+        mock_resp = MagicMock()
+        mock_resp.read = AsyncMock(
+            side_effect=[
+                b"<html><script>var httoken = '111111';</script></html>",
+                b"<html><script>var httoken = '222222';</script></html>",
+            ]
+        )
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=None)
+
+        session.get = MagicMock(return_value=mock_resp)  # type: ignore[method-assign]
+
+        t1 = await client._get_httoken(
+            "http://192.168.2.1/html/content/overview/index.html"
+        )
+        assert t1 == "111111"
+        assert (
+            client._cached_httokens[
+                "http://192.168.2.1/html/content/overview/index.html"
+            ]
+            == "111111"
+        )
+
+        t2 = await client._get_httoken(
+            "http://192.168.2.1/html/content/network/devices.html"
+        )
+        assert t2 == "222222"
+        assert (
+            client._cached_httokens[
+                "http://192.168.2.1/html/content/network/devices.html"
+            ]
+            == "222222"
+        )
+
+        # Subsequent call to same page uses cache
+        t1_cached = await client._get_httoken(
+            "http://192.168.2.1/html/content/overview/index.html"
+        )
+        assert t1_cached == "111111"
+        assert mock_resp.read.call_count == 2
