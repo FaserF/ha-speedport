@@ -611,6 +611,7 @@ class SpeedportClient:
 
     async def set_wifi_guest(self, on: bool) -> bool:
         """Turn Guest WiFi on or off."""
+        await self._ensure_auth()
         referer = "html/content/network/wlan_guest.html"
         data = {"wlan_guest_active": "1" if on else "0"}
         try:
@@ -625,6 +626,7 @@ class SpeedportClient:
 
     async def set_wifi_office(self, on: bool) -> bool:
         """Turn Office WiFi on or off."""
+        await self._ensure_auth()
         referer = "html/content/network/wlan_office.html"
         data = {"wlan_office_active": "1" if on else "0"}
         try:
@@ -1018,7 +1020,7 @@ class SpeedportClient:
                     data=body,
                     headers=headers,
                     ssl=False,
-                    timeout=aiohttp.ClientTimeout(total=3),
+                    timeout=aiohttp.ClientTimeout(total=1.5),
                 ) as resp:
                     text = await resp.text(errors="replace")
 
@@ -1122,6 +1124,14 @@ class SpeedportClient:
                     "ToTR64 port 5438 not available on %s, disabling", self._host
                 )
                 self._totr64_enabled = False
+                return {}
+            except (aiohttp.ClientError, TimeoutError, OSError) as exc:
+                _LOGGER.debug(
+                    "ToTR64 port 5438 not reachable on %s (%s), backing off for 5 min",
+                    self._host,
+                    exc,
+                )
+                self._totr64_backoff_until = now + 300.0
                 return {}
             except Exception as exc:
                 _LOGGER.debug("ToTR64 stats fetch failed for index %d: %s", idx, exc)
@@ -1310,10 +1320,16 @@ class SpeedportClient:
                                 raw.get(
                                     "wan_ipv4",
                                     raw.get(
-                                        "other_ip",
+                                        "onlineipv4",
                                         raw.get(
-                                            "ip_v4",
-                                            totr64_stats.get("totr64_ipv4", ""),
+                                            "other_ip",
+                                            raw.get(
+                                                "ip_v4",
+                                                raw.get(
+                                                    "ip",
+                                                    totr64_stats.get("totr64_ipv4", ""),
+                                                ),
+                                            ),
                                         ),
                                     ),
                                 ),
@@ -1333,14 +1349,22 @@ class SpeedportClient:
                             raw.get(
                                 "wan_ipv6",
                                 raw.get(
-                                    "transmitted_ip_v6_pool_for_lan",
+                                    "onlineipv6",
                                     raw.get(
-                                        "used_ip_v6_lan",
+                                        "transmitted_ip_v6_pool_for_lan",
                                         raw.get(
-                                            "other_ip6",
+                                            "used_ip_v6_lan",
                                             raw.get(
-                                                "ip_v6",
-                                                totr64_stats.get("totr64_ipv6", ""),
+                                                "other_ip6",
+                                                raw.get(
+                                                    "ip_v6",
+                                                    raw.get(
+                                                        "ipv6",
+                                                        totr64_stats.get(
+                                                            "totr64_ipv6", ""
+                                                        ),
+                                                    ),
+                                                ),
                                             ),
                                         ),
                                     ),
@@ -1395,6 +1419,7 @@ class SpeedportClient:
             # Session may have expired between polls — force fresh login and retry once
             _LOGGER.debug("POST %s returned empty, forcing re-login and retry", path)
             self._logged_in = False
+            self._cached_httokens.clear()
             await self.login()
             result = await self._post_json(path, data, referer=referer, auth=True)
         return (
