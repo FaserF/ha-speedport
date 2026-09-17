@@ -23,8 +23,11 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Speedport device trackers."""
-    if not entry.options.get(CONF_ENABLE_DEVICE_TRACKER, True):
+    enable_tracker = entry.options.get(
+        CONF_ENABLE_DEVICE_TRACKER,
+        entry.data.get(CONF_ENABLE_DEVICE_TRACKER, True),
+    )
+    if not enable_tracker:
         _LOGGER.debug("Device tracker disabled in entry options for %s", entry.title)
         return
 
@@ -34,10 +37,17 @@ async def async_setup_entry(
 
     tracked: set[str] = set()
 
+    _LOGGER.debug(
+        "Setting up Speedport device tracker for %s (devices in coordinator: %d)",
+        entry.title,
+        len(coordinator.data.devices) if coordinator.data else 0,
+    )
+
     @callback
     def _add_new_devices() -> None:
         """Add any new devices from the latest coordinator data."""
         if coordinator.data is None:
+            _LOGGER.debug("Coordinator data is None, no device trackers added yet")
             return
         new_entities = []
         for device in coordinator.data.devices:
@@ -53,6 +63,12 @@ async def async_setup_entry(
         if new_entities:
             _LOGGER.debug("Adding %d new device tracker entities", len(new_entities))
             async_add_entities(new_entities)
+        else:
+            _LOGGER.debug(
+                "No new device tracker entities to add (total tracked: %d, coordinator devices: %d)",
+                len(tracked),
+                len(coordinator.data.devices),
+            )
 
     # Register callback to add new devices on each update
     entry.async_on_unload(coordinator.async_add_listener(_add_new_devices))

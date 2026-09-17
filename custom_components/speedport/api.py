@@ -937,12 +937,17 @@ class SpeedportClient:
         _LOGGER.debug("Merged raw keys: %s", list(raw.keys()))
 
         # Devices — fetch sequentially with appropriate referers to avoid session conflicts.
+        # Speedport Smart 4 Typ A and modern firmware return DeviceList.json without referer/token.
         devices_raw: dict[str, Any] = {}
         for device_path, referer, auth in (
+            ("data/DeviceList.json", "", False),
             ("data/DeviceList.json", "html/content/network/devices.html", False),
+            ("data/DeviceList.json", "", True),
             ("data/DeviceList.json", "html/content/network/devices.html", True),
+            ("data/HomeNetwork.json", "", False),
             ("data/HomeNetwork.json", "html/content/network/homenetwork.html", False),
             ("data/HomeNetwork.json", "html/content/network/homenetwork.html", True),
+            ("data/LAN.json", "", False),
             ("data/LAN.json", "html/content/network/lan.html", False),
             ("data/Modules.json", "html/content/overview/index.html", False),
         ):

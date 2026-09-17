@@ -100,6 +100,31 @@ async def test_device_tracker_disabled_option(hass: HomeAssistant):
 
 
 @pytest.mark.asyncio
+async def test_device_tracker_enabled_fallback_from_data(hass: HomeAssistant):
+    """Test device tracker setup when option is not set but enabled in entry.data."""
+    entry = MagicMock(entry_id="test_entry_data_fallback", title="Speedport")
+    entry.options = {}
+    entry.data = {"host": "192.168.178.1", CONF_ENABLE_DEVICE_TRACKER: True}
+
+    dev1 = WlanDevice(mac="AA:BB:CC:DD:EE:01", hostname="MyPhone", connected=True)
+    coordinator = MagicMock()
+    coordinator.config_entry = entry
+    coordinator.data = MagicMock()
+    coordinator.data.devices = [dev1]
+    coordinator.data.get_device = lambda mac: dev1
+
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {DATA_COORDINATOR: coordinator}
+
+    async_add_entities = MagicMock()
+    await async_setup_entry(hass, entry, async_add_entities)
+
+    assert async_add_entities.called
+    trackers = async_add_entities.call_args[0][0]
+    assert len(trackers) == 1
+    assert trackers[0].mac_address == "aa:bb:cc:dd:ee:01"
+
+
+@pytest.mark.asyncio
 async def test_device_tracker_dynamic_device_added(hass: HomeAssistant):
     """Test dynamic addition of devices via coordinator listener callback."""
     entry = MagicMock(entry_id="test_entry_dynamic", title="Speedport")
