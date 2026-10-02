@@ -489,8 +489,8 @@ class SpeedportClient:
                     or "login_index_html" in text
                 ):
                     _LOGGER.debug("Session expired or redirected to login for %s", path)
-                    # Invalidate cached tokens but keep session alive
                     self._cached_httokens.clear()
+                    self._logged_in = False
                     return {}
 
                 if self._encrypted_mode is None:
@@ -647,6 +647,16 @@ class SpeedportClient:
         result = await self._post_json(
             "data/Modules.json", data, referer=referer, auth=True
         )
+        if not result:
+            _LOGGER.debug(
+                "POST data/Modules.json returned empty, forcing re-login and retry"
+            )
+            self._logged_in = False
+            self._cached_httokens.clear()
+            await self.login()
+            result = await self._post_json(
+                "data/Modules.json", data, referer=referer, auth=True
+            )
         return bool(result) or result.get("status") == "ok"
 
     async def _get_challenge(self) -> str | None:
@@ -868,20 +878,28 @@ class SpeedportClient:
                     False,
                 ),
                 ("data/LAN.json", "html/content/network/lan.html", False),
-                # IPData.json is encrypted with DEFAULT_KEY on modern routers
-                # (not with the session login_key), so auth=False is correct here.
-                # Using auth=True would pick _login_key for decryption and produce
-                # garbage/empty output on Speedport Smart 4 Typ B.
+                # IPData.json: modern routers (Smart 4 Typ A/B) may encrypt with DEFAULT_KEY
+                # or session _login_key depending on firmware. We try auth=False first.
                 (
                     "data/IPData.json",
                     "html/content/internet/con_ipdata.html",
                     False,
+                ),
+                (
+                    "data/IPData.json",
+                    "html/content/internet/con_ipdata.html",
+                    True,
                 ),
                 # data/Internet.json is an alternative endpoint used on some firmwares
                 (
                     "data/Internet.json",
                     "html/content/internet/con_ipdata.html",
                     False,
+                ),
+                (
+                    "data/Internet.json",
+                    "html/content/internet/con_ipdata.html",
+                    True,
                 ),
                 (
                     "data/PhoneCalls.json",
@@ -910,17 +928,13 @@ class SpeedportClient:
                 "other_ip",
                 "ip_v4",
             )
-            if not any(raw.get(f) for f in _ip_fields):
-                try:
-                    ip_fallback = await self._get_json(
-                        "data/IPData.json",
-                        referer="html/content/internet/con_ipdata.html",
-                        auth=True,
-                    )
-                    if ip_fallback:
-                        raw.update(ip_fallback)
-                except Exception as exc:
-                    _LOGGER.debug("IPData auth fallback failed: %s", exc)
+            # If session was invalidated during the fetch of protected endpoints,
+            # raise SpeedportAuthError so the coordinator performs a clean re-login and refetches.
+            if not self._logged_in:
+                _LOGGER.debug(
+                    "Session expired during data fetch, raising SpeedportAuthError for retry"
+                )
+                raise SpeedportAuthError("Session expired during poll")
 
         # Heartbeat: Login.json GET fills missing fields regardless of model
         try:

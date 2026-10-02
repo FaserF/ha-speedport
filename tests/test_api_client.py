@@ -428,3 +428,42 @@ async def test_per_page_httoken_caching():
         )
         assert t1_cached == "111111"
         assert mock_resp.read.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_session_expiry_raises_auth_error():
+    """Test that session expiry during poll invalidates session and raises SpeedportAuthError."""
+    from custom_components.speedport.api import SpeedportAuthError
+
+    async with aiohttp.ClientSession() as session:
+        client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
+        client._logged_in = True
+        client._encrypted_mode = True
+
+        mock_login_redirect = MagicMock()
+        mock_login_redirect.text = AsyncMock(
+            return_value="<html><head><title>Document moved</title></head><body>Redirect to login/index.html</body></html>"
+        )
+        mock_login_redirect.__aenter__ = AsyncMock(return_value=mock_login_redirect)
+        mock_login_redirect.__aexit__ = AsyncMock(return_value=None)
+
+        mock_status = MagicMock()
+        mock_status.text = AsyncMock(
+            return_value='[{"varid":"device_name","varvalue":"Speedport Smart 4"}]'
+        )
+        mock_status.__aenter__ = AsyncMock(return_value=mock_status)
+        mock_status.__aexit__ = AsyncMock(return_value=None)
+
+        def mock_get(url, *args, **kwargs):
+            url_str = str(url)
+            if "data/Status.json" in url_str:
+                return mock_status
+            return mock_login_redirect
+
+        session.get = MagicMock(side_effect=mock_get)  # type: ignore[method-assign]
+
+        with pytest.raises(SpeedportAuthError):
+            await client.get_all_data()
+
+        assert not client._logged_in
+        assert len(client._cached_httokens) == 0
