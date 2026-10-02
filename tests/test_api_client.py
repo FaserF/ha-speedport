@@ -461,6 +461,7 @@ async def test_session_expiry_raises_auth_error():
             return mock_login_redirect
 
         session.get = MagicMock(side_effect=mock_get)  # type: ignore[method-assign]
+        session.post = MagicMock(return_value=mock_login_redirect)  # type: ignore[method-assign]
 
         with pytest.raises(SpeedportAuthError):
             await client.get_all_data()
