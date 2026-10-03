@@ -9,7 +9,6 @@ dependencies = [
     "voluptuous",
     "yarl",
     "pycryptodome==3.23.0",
-    "pytz==2026.4",
     "segno==1.6.6",
 ]
 
