@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
-import pytz
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -25,6 +25,10 @@ from homeassistant.helpers.typing import StateType
 from .const import DATA_COORDINATOR, DOMAIN
 from .coordinator import SpeedportDataCoordinator
 from .entity import SpeedportEntity
+
+# Timestamps from the router are local German time. Resolved at import, which
+# Home Assistant runs in an executor, so the event loop never reads tzdata.
+ROUTER_TIME_ZONE = ZoneInfo("Europe/Berlin")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -334,7 +338,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
                 date = datetime.strptime(str(val), "%Y-%m-%d %H:%M:%S").replace(
                     second=0
                 )
-                return pytz.timezone("Europe/Berlin").localize(date)
+                return date.replace(tzinfo=ROUTER_TIME_ZONE)
             except ValueError, TypeError:
                 return None
 
