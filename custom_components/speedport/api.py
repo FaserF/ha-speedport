@@ -379,10 +379,13 @@ class SpeedportClient:
                                 proto.close()
 
     async def close(self) -> None:
-        """Close the client session and resources."""
+        """Log out and release the router session.
+
+        The aiohttp session is created by Home Assistant
+        (``async_create_clientsession``), which closes it when the config entry
+        is unloaded; closing it here only triggers a warning.
+        """
         await self.logout()
-        if self._session and not self._session.closed:
-            await self._session.close()
 
     @property
     def is_logged_in(self) -> bool:

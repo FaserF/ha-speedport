@@ -468,3 +468,23 @@ async def test_session_expiry_raises_auth_error():
 
         assert not client._logged_in
         assert len(client._cached_httokens) == 0
+
+
+@pytest.mark.asyncio
+async def test_close_logs_out_without_closing_the_session():
+    """close() logs out but leaves the Home Assistant session to Home Assistant."""
+    session = MagicMock()
+    session.closed = False
+    session.close = AsyncMock()
+    client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
+    client._logged_in = True
+
+    with patch.object(
+        client, "_post_json", AsyncMock(return_value={})
+    ) as mock_post_json:
+        await client.close()
+
+    mock_post_json.assert_awaited_once()
+    assert mock_post_json.await_args.args[1] == {"logout": "byby"}
+    assert not client.is_logged_in
+    session.close.assert_not_awaited()
