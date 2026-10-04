@@ -8,7 +8,7 @@ dependencies = [
     "aiohttp",
     "voluptuous",
     "yarl",
-    "pycryptodome==3.23.0",
+    "pycryptodome==3.24.0",
     "segno==1.6.6",
 ]
 
