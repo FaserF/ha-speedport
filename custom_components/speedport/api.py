@@ -1048,9 +1048,9 @@ class SpeedportClient:
 
                     if "9801" in text:
                         _LOGGER.debug(
-                            "ToTR64 SOAP fault 9801 (session active), backing off for 15s"
+                            "ToTR64 SOAP fault 9801 (session active), backing off for 60s"
                         )
-                        self._totr64_backoff_until = now + 15.0
+                        self._totr64_backoff_until = now + 60.0
                         return {}
 
                     # Parse BytesReceived and BytesSent

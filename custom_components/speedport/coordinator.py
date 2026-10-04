@@ -91,6 +91,12 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
                     str(update_info.get("status", "")).lower() == "new_version"
                 )
                 data.latest_version = update_info.get("new_version")
+            elif data.raw.get("fwupd_avail") in ("1", 1, True, "true"):
+                # On modern routers (e.g. Speedport Smart 4), update info is reported in Status.json
+                data.update_available = True
+                data.latest_version = (
+                    data.raw.get("fwupd_version") or data.latest_version
+                )
         except Exception as err:
             _LOGGER.debug("Failed to fetch update info: %s", err)
 
