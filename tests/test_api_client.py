@@ -488,3 +488,15 @@ async def test_close_logs_out_without_closing_the_session():
     assert mock_post_json.await_args.args[1] == {"logout": "byby"}
     assert not client.is_logged_in
     session.close.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_cookie_jar_unsafe_set_for_ip():
+    """Ensure cookie_jar._unsafe is enabled so cookies are accepted for IP hosts."""
+    session = MagicMock()
+    session.cookie_jar = MagicMock()
+    session.cookie_jar._unsafe = False
+
+    client = SpeedportClient("192.168.2.1", ROUTER_PASSWORD, session)
+    assert client is not None
+    assert session.cookie_jar._unsafe is True

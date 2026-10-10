@@ -310,6 +310,16 @@ class SpeedportClient:
 
         self._password = password
         self._session = session
+        if (
+            hasattr(self._session, "cookie_jar")
+            and self._session.cookie_jar is not None
+        ):
+            # Allow cookies when host is configured with an IP address (default aiohttp behavior
+            # drops cookies for IP addresses unless unsafe=True).
+            try:
+                self._session.cookie_jar._unsafe = True  # type: ignore[attr-defined]
+            except Exception:
+                pass
         self._base_url = (
             f"https://{self._host}" if use_https else f"http://{self._host}"
         )
