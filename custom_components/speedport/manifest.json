@@ -43,7 +43,7 @@
     "custom_components.speedport"
   ],
   "requirements": [
-    "pycryptodome==4.0.1",
+    "pycryptodome==4.1.0",
     "segno==1.6.6"
   ],
   "ssdp": [
