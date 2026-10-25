@@ -18,8 +18,9 @@ from homeassistant.const import (
     UnitOfDataRate,
     UnitOfInformation,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.typing import StateType
 
 from .const import DATA_COORDINATOR, DOMAIN
@@ -260,6 +261,31 @@ async def async_setup_entry(
 
     async_add_entities(entities)
 
+    tracked_mesh_nodes: set[str] = set()
+
+    @callback
+    def _add_new_mesh_nodes() -> None:
+        """Add any new mesh nodes from the latest coordinator data."""
+        if coordinator.data is None:
+            return
+        
+        new_entities = []
+        for device in coordinator.data.devices:
+            if device.type == "2" or device.slave == "1":
+                mac = device.mac.lower()
+                if mac and mac not in tracked_mesh_nodes:
+                    tracked_mesh_nodes.add(mac)
+                    new_entities.extend([
+                        SpeedportMeshNodeSensor(coordinator, mac, "downspeed"),
+                        SpeedportMeshNodeSensor(coordinator, mac, "upspeed"),
+                    ])
+        
+        if new_entities:
+            async_add_entities(new_entities)
+
+    entry.async_on_unload(coordinator.async_add_listener(_add_new_mesh_nodes))
+    _add_new_mesh_nodes()
+
 
 class SpeedportSensor(SpeedportEntity, SensorEntity):
     """Speedport sensor entity."""
@@ -328,7 +354,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
         ):
             try:
                 return int(val) if val is not None else None
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 return None
 
         # Handle timestamp sensors
@@ -339,7 +365,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
                     second=0
                 )
                 return date.replace(tzinfo=ROUTER_TIME_ZONE)
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 return None
 
         return val
@@ -372,3 +398,64 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
         if self.entity_description.key == "calls":
             return {"calls": data.calls}
         return {}
+
+
+class SpeedportMeshNodeSensor(SpeedportEntity, SensorEntity):
+    """Speedport mesh node sensor entity."""
+
+    _attr_has_entity_name = True
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_registry_enabled_default = True
+
+    def __init__(
+        self,
+        coordinator: SpeedportDataCoordinator,
+        mac: str,
+        sensor_type: str,
+    ) -> None:
+        """Initialize the mesh node sensor."""
+        super().__init__(coordinator)
+        self.coordinator = coordinator
+        self._mac = mac.lower()
+        self._sensor_type = sensor_type
+        config_entry = coordinator.config_entry
+        assert config_entry is not None
+        
+        device = self._get_device()
+        hostname = device.hostname if device and device.hostname else self._mac
+
+        self._attr_unique_id = f"{config_entry.entry_id}_{self._mac}_{sensor_type}"
+        
+        if sensor_type == "downspeed":
+            self._attr_translation_key = "mesh_downspeed"
+            self._attr_name = f"{hostname} Download Speed"
+            self._attr_icon = "mdi:download-network"
+            self._attr_native_unit_of_measurement = UnitOfDataRate.MEGABITS_PER_SECOND
+            self._attr_device_class = SensorDeviceClass.DATA_RATE
+        else:
+            self._attr_translation_key = "mesh_upspeed"
+            self._attr_name = f"{hostname} Upload Speed"
+            self._attr_icon = "mdi:upload-network"
+            self._attr_native_unit_of_measurement = UnitOfDataRate.MEGABITS_PER_SECOND
+            self._attr_device_class = SensorDeviceClass.DATA_RATE
+
+    def _get_device(self):
+        """Get the tracked device from coordinator data."""
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get_device(self._mac)
+
+    @property
+    def native_value(self) -> StateType:
+        """Return the sensor value."""
+        device = self._get_device()
+        if device is None:
+            return None
+        
+        try:
+            val = getattr(device, self._sensor_type)
+            if not val:
+                return None
+            return round(int(val) / 1000000, 2)
+        except (ValueError, TypeError, AttributeError):
+            return None
