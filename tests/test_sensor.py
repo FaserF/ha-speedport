@@ -7,9 +7,11 @@ import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.speedport.const import DATA_COORDINATOR, DOMAIN
+from custom_components.speedport.api import WlanDevice
 from custom_components.speedport.sensor import (
     ROUTER_TIME_ZONE,
     SENSORS,
+    SpeedportMeshNodeSensor,
     SpeedportSensor,
     async_setup_entry,
 )
@@ -26,7 +28,14 @@ async def test_sensor_setup(hass: HomeAssistant):
     coordinator.data = MagicMock()
     coordinator.data.device_name = "Speedport W 724V"
     coordinator.data.onlinestatus = "online"
-    coordinator.data.devices = []
+    mesh_node = WlanDevice(
+        mac="AA:BB:CC:DD:EE:FF",
+        hostname="Speed Home WiFi",
+        is_mesh_node=True,
+        downspeed="1000",
+        upspeed="500",
+    )
+    coordinator.data.devices = [mesh_node]
     coordinator.data.raw = {}
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {DATA_COORDINATOR: coordinator}
@@ -35,8 +44,12 @@ async def test_sensor_setup(hass: HomeAssistant):
     await async_setup_entry(hass, entry, async_add_entities)
 
     assert async_add_entities.called
-    sensors = async_add_entities.call_args[0][0]
+    sensors = async_add_entities.call_args_list[1][0][0]
     assert len(sensors) > 0
+
+    mesh_sensors = async_add_entities.call_args_list[0][0][0]
+    assert len(mesh_sensors) == 2
+    assert all(isinstance(s, SpeedportMeshNodeSensor) for s in mesh_sensors)
 
     # Check one sensor
     router_state_sensor = next(
