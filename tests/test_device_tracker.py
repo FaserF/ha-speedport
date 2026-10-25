@@ -66,7 +66,7 @@ async def test_device_tracker_setup(hass: HomeAssistant):
     assert t1.unique_id == "test_entry_tracker_aa:bb:cc:dd:ee:01"
     assert t1.name is None
     assert t1._attr_has_entity_name is True
-    assert t1._attr_entity_registry_enabled_default is True
+    assert t1.entity_registry_enabled_default is True
     assert t1.is_connected is True
     assert t1.ip_address == "192.168.178.20"
     assert t1.hostname == "MyPhone"

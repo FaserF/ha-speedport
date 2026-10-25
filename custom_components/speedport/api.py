@@ -28,6 +28,14 @@ DEFAULT_KEY = "cdc0cac1280b516e674f0057e4929bca84447cca8425007e33a88a5cf598a190"
 HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
 
 
+def _format_mac(mac: str) -> str:
+    """Format the mac address string to lowercase with colons."""
+    to_test = mac.lower().replace("-", "").replace(":", "")
+    if len(to_test) == 12:
+        return ":".join(to_test[i : i + 2] for i in range(0, 12, 2))
+    return mac.lower()
+
+
 def _simplify_response(data: list[dict[str, Any]]) -> dict[str, Any]:
     """Convert the Speedport API's list-of-dicts format into a flat dict.
 
@@ -157,11 +165,12 @@ class WlanDevice:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> WlanDevice:
         """Create a WlanDevice from raw device API data."""
+        raw_mac = data.get(
+            "mdevice_mac",
+            data.get("device_mac", data.get("mac_addr", data.get("mac", ""))),
+        )
         return cls(
-            mac=data.get(
-                "mdevice_mac",
-                data.get("device_mac", data.get("mac_addr", data.get("mac", ""))),
-            ),
+            mac=_format_mac(raw_mac) if raw_mac else "",
             hostname=data.get(
                 "mdevice_name",
                 data.get(
@@ -1185,7 +1194,7 @@ class SpeedportClient:
                 if val is None:
                     return default
                 return int(val)
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 return default
 
         def _bool(val: Any) -> bool | None:
@@ -1285,11 +1294,12 @@ class SpeedportClient:
             if inet_up is not None:
                 inet_up = inet_up // 1000
 
+        raw_router_mac = raw.get("mac", raw.get("lan_mac", raw.get("serial_number", "")))
         return SpeedportData(
             device_name=raw.get("device_name", raw.get("model_name", "Speedport")),
             firmware_version=firmware,
             serial_number=raw.get("serial_number", ""),
-            mac=raw.get("mac", raw.get("lan_mac", raw.get("serial_number", ""))),
+            mac=_format_mac(raw_router_mac) if raw_router_mac else "",
             online_status=raw.get("onlinestatus", raw.get("online_status", "")),
             router_state=raw.get("router_state", ""),
             # W 724V uses "dsl_link" or "dsl_link_status"
