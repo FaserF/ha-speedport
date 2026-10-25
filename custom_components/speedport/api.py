@@ -1194,7 +1194,7 @@ class SpeedportClient:
                 if val is None:
                     return default
                 return int(val)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return default
 
         def _bool(val: Any) -> bool | None:
@@ -1294,7 +1294,9 @@ class SpeedportClient:
             if inet_up is not None:
                 inet_up = inet_up // 1000
 
-        raw_router_mac = raw.get("mac", raw.get("lan_mac", raw.get("serial_number", "")))
+        raw_router_mac = raw.get(
+            "mac", raw.get("lan_mac", raw.get("serial_number", ""))
+        )
         return SpeedportData(
             device_name=raw.get("device_name", raw.get("model_name", "Speedport")),
             firmware_version=firmware,
