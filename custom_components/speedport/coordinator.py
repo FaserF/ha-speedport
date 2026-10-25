@@ -178,10 +178,14 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
             if device.is_mesh_node and device.mac:
                 device_registry.async_get_or_create(
                     config_entry_id=self.config_entry.entry_id,
-                    identifiers={(DOMAIN, f"{self.config_entry.entry_id}_{device.mac.lower()}")},
+                    identifiers={
+                        (DOMAIN, f"{self.config_entry.entry_id}_{device.mac.lower()}")
+                    },
                     connections={(dr.CONNECTION_NETWORK_MAC, device.mac)},
                     manufacturer="Deutsche Telekom",
-                    model="Speed Home WiFi" if "speedhome" in (device.hostname or "").lower() else "Mesh Repeater",
+                    model="Speed Home WiFi"
+                    if "speedhome" in (device.hostname or "").lower()
+                    else "Mesh Repeater",
                     name=device.hostname or "Mesh Repeater",
                     via_device=(DOMAIN, self.config_entry.entry_id),
                 )

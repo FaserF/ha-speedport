@@ -3,13 +3,10 @@
 from unittest.mock import MagicMock
 
 import pytest
-from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.core import HomeAssistant
 
 from custom_components.speedport.api import WlanDevice
 from custom_components.speedport.binary_sensor import (
-    BINARY_SENSORS,
-    SpeedportBinarySensor,
     SpeedportMeshNodeBinarySensor,
     async_setup_entry,
 )
@@ -60,4 +57,3 @@ async def test_binary_sensor_setup(hass: HomeAssistant):
     mesh_sensor = mesh_sensors[0]
     assert mesh_sensor.unique_id == "test_entry_mesh_aa:bb:cc:dd:ee:ff_connected"
     assert mesh_sensor.is_on is True
-

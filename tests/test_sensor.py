@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.speedport.const import DATA_COORDINATOR, DOMAIN
 from custom_components.speedport.api import WlanDevice
+from custom_components.speedport.const import DATA_COORDINATOR, DOMAIN
 from custom_components.speedport.sensor import (
     ROUTER_TIME_ZONE,
     SENSORS,

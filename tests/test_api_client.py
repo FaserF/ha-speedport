@@ -101,7 +101,9 @@ async def test_get_all_data_fallback():
         mock_empty_list.__aexit__ = AsyncMock(return_value=None)
 
         mock_device_list = MagicMock()
-        mock_device_list.text = AsyncMock(return_value='[{"varid":"addmdevice","varvalue":[{"mdevice_mac":"AA:BB:CC","mdevice_type":"2","mdevice_hostname":"Repeater"}]}]')
+        mock_device_list.text = AsyncMock(
+            return_value='[{"varid":"addmdevice","varvalue":[{"mdevice_mac":"AA:BB:CC","mdevice_type":"2","mdevice_hostname":"Repeater"}]}]'
+        )
         mock_device_list.__aenter__ = AsyncMock(return_value=mock_device_list)
         mock_device_list.__aexit__ = AsyncMock(return_value=None)
 

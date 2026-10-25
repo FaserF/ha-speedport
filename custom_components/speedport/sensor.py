@@ -351,11 +351,15 @@ class SpeedportMeshNodeSensor(SpeedportEntity, SensorEntity):
         assert self.coordinator.config_entry is not None
         device = self._device
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self.coordinator.config_entry.entry_id}_{self._mac}")},
+            identifiers={
+                (DOMAIN, f"{self.coordinator.config_entry.entry_id}_{self._mac}")
+            },
             connections={(dr.CONNECTION_NETWORK_MAC, self._mac.upper())},
             name=device.hostname if device and device.hostname else "Mesh Repeater",
             manufacturer="Deutsche Telekom",
-            model="Speed Home WiFi" if device and "speedhome" in (device.hostname or "").lower() else "Mesh Repeater",
+            model="Speed Home WiFi"
+            if device and "speedhome" in (device.hostname or "").lower()
+            else "Mesh Repeater",
             via_device=(DOMAIN, self.coordinator.config_entry.entry_id),
         )
 
@@ -372,7 +376,7 @@ class SpeedportMeshNodeSensor(SpeedportEntity, SensorEntity):
 
         try:
             return int(val) if val is not None else None
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
 
     @property
@@ -448,7 +452,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
         ):
             try:
                 return int(val) if val is not None else None
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return None
 
         # Handle timestamp sensors
@@ -459,7 +463,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
                     second=0
                 )
                 return date.replace(tzinfo=ROUTER_TIME_ZONE)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return None
 
         return val
