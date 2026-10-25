@@ -20,7 +20,6 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.typing import StateType
 
 from .const import DATA_COORDINATOR, DOMAIN
@@ -268,18 +267,20 @@ async def async_setup_entry(
         """Add any new mesh nodes from the latest coordinator data."""
         if coordinator.data is None:
             return
-        
+
         new_entities = []
         for device in coordinator.data.devices:
             if device.type == "2" or device.slave == "1":
                 mac = device.mac.lower()
                 if mac and mac not in tracked_mesh_nodes:
                     tracked_mesh_nodes.add(mac)
-                    new_entities.extend([
-                        SpeedportMeshNodeSensor(coordinator, mac, "downspeed"),
-                        SpeedportMeshNodeSensor(coordinator, mac, "upspeed"),
-                    ])
-        
+                    new_entities.extend(
+                        [
+                            SpeedportMeshNodeSensor(coordinator, mac, "downspeed"),
+                            SpeedportMeshNodeSensor(coordinator, mac, "upspeed"),
+                        ]
+                    )
+
         if new_entities:
             async_add_entities(new_entities)
 
@@ -354,7 +355,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
         ):
             try:
                 return int(val) if val is not None else None
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return None
 
         # Handle timestamp sensors
@@ -365,7 +366,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
                     second=0
                 )
                 return date.replace(tzinfo=ROUTER_TIME_ZONE)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return None
 
         return val
@@ -420,12 +421,12 @@ class SpeedportMeshNodeSensor(SpeedportEntity, SensorEntity):
         self._sensor_type = sensor_type
         config_entry = coordinator.config_entry
         assert config_entry is not None
-        
+
         device = self._get_device()
         hostname = device.hostname if device and device.hostname else self._mac
 
         self._attr_unique_id = f"{config_entry.entry_id}_{self._mac}_{sensor_type}"
-        
+
         if sensor_type == "downspeed":
             self._attr_translation_key = "mesh_downspeed"
             self._attr_name = f"{hostname} Download Speed"
@@ -451,11 +452,11 @@ class SpeedportMeshNodeSensor(SpeedportEntity, SensorEntity):
         device = self._get_device()
         if device is None:
             return None
-        
+
         try:
             val = getattr(device, self._sensor_type)
             if not val:
                 return None
             return round(int(val) / 1000000, 2)
-        except (ValueError, TypeError, AttributeError):
+        except ValueError, TypeError, AttributeError:
             return None

@@ -12,7 +12,6 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DATA_COORDINATOR, DOMAIN
 from .coordinator import SpeedportDataCoordinator
@@ -114,7 +113,7 @@ async def async_setup_entry(
         """Add any new mesh nodes from the latest coordinator data."""
         if coordinator.data is None:
             return
-        
+
         new_entities = []
         for device in coordinator.data.devices:
             if device.type == "2" or device.slave == "1":
@@ -122,7 +121,7 @@ async def async_setup_entry(
                 if mac and mac not in tracked_mesh_nodes:
                     tracked_mesh_nodes.add(mac)
                     new_entities.append(SpeedportMeshNodeBinarySensor(coordinator, mac))
-        
+
         if new_entities:
             async_add_entities(new_entities)
 
@@ -206,7 +205,7 @@ class SpeedportMeshNodeBinarySensor(SpeedportEntity, BinarySensorEntity):
         self._mac = mac.lower()
         config_entry = coordinator.config_entry
         assert config_entry is not None
-        
+
         device = self._get_device()
         hostname = device.hostname if device and device.hostname else self._mac
 
