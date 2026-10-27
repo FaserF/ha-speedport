@@ -85,7 +85,11 @@ class SpeedportDeviceTracker(
     _attr_has_entity_name = True
     _attr_name = None
     _attr_should_poll = False
-    _attr_entity_registry_enabled_default = True
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        """Return if the entity should be enabled when first added."""
+        return True
 
     def __init__(self, coordinator: SpeedportDataCoordinator, mac: str) -> None:
         """Initialize the device tracker."""
