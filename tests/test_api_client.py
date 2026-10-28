@@ -100,6 +100,13 @@ async def test_get_all_data_fallback():
         mock_empty_list.__aenter__ = AsyncMock(return_value=mock_empty_list)
         mock_empty_list.__aexit__ = AsyncMock(return_value=None)
 
+        mock_device_list = MagicMock()
+        mock_device_list.text = AsyncMock(
+            return_value='[{"varid":"addmdevice","varvalue":[{"mdevice_mac":"AA:BB:CC","mdevice_type":"2","mdevice_hostname":"Repeater"}]}]'
+        )
+        mock_device_list.__aenter__ = AsyncMock(return_value=mock_device_list)
+        mock_device_list.__aexit__ = AsyncMock(return_value=None)
+
         mock_phone_calls = MagicMock()
         mock_phone_calls.text = AsyncMock(
             return_value='[{"varid":"calls","varvalue":[{"type":"missed","num":"0176********","date":"25.06.26","time":"10:05","duration":"0:00","line":"0711******"}]}]'
@@ -127,6 +134,8 @@ async def test_get_all_data_fallback():
                 return mock_phone_calls
             if "data/Login.json" in url_str:
                 return mock_login_heartbeat
+            if "data/DeviceList.json" in url_str:
+                return mock_device_list
             return mock_empty_list
 
         session.get = MagicMock(side_effect=mock_get)  # type: ignore[method-assign]
@@ -137,6 +146,9 @@ async def test_get_all_data_fallback():
         assert data.online_status == "online"
         assert len(data.calls) == 1
         assert data.calls[0]["type"] == "missed"
+        assert len(data.devices) == 1
+        assert data.devices[0].mac == "AA:BB:CC"
+        assert data.devices[0].is_mesh_node is True
 
 
 @pytest.mark.asyncio

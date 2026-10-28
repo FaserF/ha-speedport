@@ -161,11 +161,11 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
         host = self.config_entry.data[CONF_HOST]
 
         # Use the config entry ID as a stable identifier for the router device
-        identifiers = {(DOMAIN, self.config_entry.entry_id)}
+        router_identifiers = {(DOMAIN, self.config_entry.entry_id)}
 
         device_registry.async_get_or_create(
             config_entry_id=self.config_entry.entry_id,
-            identifiers=identifiers,
+            identifiers=router_identifiers,
             manufacturer="Deutsche Telekom",
             model=data.device_name or "Speedport",
             name=data.device_name or "Speedport",
@@ -173,3 +173,19 @@ class SpeedportDataCoordinator(DataUpdateCoordinator[SpeedportData]):
             hw_version=data.serial_number or None,
             configuration_url=f"http://{host}",
         )
+
+        for device in data.devices:
+            if device.is_mesh_node and device.mac:
+                device_registry.async_get_or_create(
+                    config_entry_id=self.config_entry.entry_id,
+                    identifiers={
+                        (DOMAIN, f"{self.config_entry.entry_id}_{device.mac.lower()}")
+                    },
+                    connections={(dr.CONNECTION_NETWORK_MAC, device.mac)},
+                    manufacturer="Deutsche Telekom",
+                    model="Speed Home WiFi"
+                    if "speedhome" in (device.hostname or "").lower()
+                    else "Mesh Repeater",
+                    name=device.hostname or "Mesh Repeater",
+                    via_device=(DOMAIN, self.config_entry.entry_id),
+                )

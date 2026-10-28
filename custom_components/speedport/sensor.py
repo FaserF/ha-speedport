@@ -18,10 +18,13 @@ from homeassistant.const import (
     UnitOfDataRate,
     UnitOfInformation,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
+from .api import WlanDevice
 from .const import DATA_COORDINATOR, DOMAIN
 from .coordinator import SpeedportDataCoordinator
 from .entity import SpeedportEntity
@@ -249,7 +252,7 @@ async def async_setup_entry(
         DATA_COORDINATOR
     ]
 
-    entities = []
+    entities: list[SensorEntity] = []
     for description in SENSORS:
         # Filter out LTE/5G sensors if the router definitely doesn't support them
         if (
@@ -258,7 +261,128 @@ async def async_setup_entry(
             continue
         entities.append(SpeedportSensor(coordinator, description))
 
+    tracked_mesh_nodes: set[str] = set()
+
+    @callback
+    def _add_new_mesh_nodes() -> None:
+        """Add sensors for new mesh nodes."""
+        if coordinator.data is None:
+            return
+        new_entities: list[SensorEntity] = []
+        for device in coordinator.data.devices:
+            if device.is_mesh_node and device.mac:
+                mac = device.mac.lower()
+                if mac not in tracked_mesh_nodes:
+                    tracked_mesh_nodes.add(mac)
+                    new_entities.extend(
+                        [
+                            SpeedportMeshNodeSensor(
+                                coordinator,
+                                mac,
+                                SpeedportSensorEntityDescription(
+                                    key=f"mesh_{mac}_downspeed",
+                                    translation_key="mesh_downspeed",
+                                    name="Link Rate Down",
+                                    icon="mdi:download-network",
+                                    device_class=SensorDeviceClass.DATA_RATE,
+                                    state_class=SensorStateClass.MEASUREMENT,
+                                    native_unit_of_measurement=UnitOfDataRate.BITS_PER_SECOND,
+                                    data_key="downspeed",
+                                ),
+                            ),
+                            SpeedportMeshNodeSensor(
+                                coordinator,
+                                mac,
+                                SpeedportSensorEntityDescription(
+                                    key=f"mesh_{mac}_upspeed",
+                                    translation_key="mesh_upspeed",
+                                    name="Link Rate Up",
+                                    icon="mdi:upload-network",
+                                    device_class=SensorDeviceClass.DATA_RATE,
+                                    state_class=SensorStateClass.MEASUREMENT,
+                                    native_unit_of_measurement=UnitOfDataRate.BITS_PER_SECOND,
+                                    data_key="upspeed",
+                                ),
+                            ),
+                        ]
+                    )
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _add_new_mesh_nodes()
+    entry.async_on_unload(coordinator.async_add_listener(_add_new_mesh_nodes))
+
     async_add_entities(entities)
+
+
+class SpeedportMeshNodeSensor(SpeedportEntity, SensorEntity):
+    """Sensor for a Speedport mesh node."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+    entity_description: SpeedportSensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: SpeedportDataCoordinator,
+        mac: str,
+        description: SpeedportSensorEntityDescription,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        assert coordinator.config_entry is not None
+        self.entity_description = description
+        self._mac = mac
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{description.key}"
+
+    @property
+    def _device(self) -> WlanDevice | None:
+        """Get the mesh node device."""
+        if not self.coordinator.data:
+            return None
+        return next(
+            (d for d in self.coordinator.data.devices if d.mac.lower() == self._mac),
+            None,
+        )
+
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        """Return device information."""
+        assert self.coordinator.config_entry is not None
+        device = self._device
+        return DeviceInfo(
+            identifiers={
+                (DOMAIN, f"{self.coordinator.config_entry.entry_id}_{self._mac}")
+            },
+            connections={(dr.CONNECTION_NETWORK_MAC, self._mac.upper())},
+            name=device.hostname if device and device.hostname else "Mesh Repeater",
+            manufacturer="Deutsche Telekom",
+            model="Speed Home WiFi"
+            if device and "speedhome" in (device.hostname or "").lower()
+            else "Mesh Repeater",
+            via_device=(DOMAIN, self.coordinator.config_entry.entry_id),
+        )
+
+    @property
+    def native_value(self) -> StateType:
+        """Return the state of the sensor."""
+        device = self._device
+        if not device:
+            return None
+
+        val = getattr(device, self.entity_description.data_key, None)
+        if val == "":
+            return None
+
+        try:
+            return int(val) if val is not None else None
+        except TypeError, ValueError:
+            return None
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return super().available and self._device is not None
 
 
 class SpeedportSensor(SpeedportEntity, SensorEntity):

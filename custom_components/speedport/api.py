@@ -161,6 +161,7 @@ class WlanDevice:
     use_dhcp: str = ""
     wifi: str = ""
     id: str = ""
+    is_mesh_node: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> WlanDevice:
@@ -201,6 +202,7 @@ class WlanDevice:
             use_dhcp=data.get("mdevice_use_dhcp", data.get("use_dhcp", "")),
             wifi=data.get("mdevice_wifi", data.get("wifi", "")),
             id=data.get("mdevice_id", data.get("id", "")),
+            is_mesh_node=data.get("mdevice_type", data.get("device_type", "")) == "2",
         )
 
 
