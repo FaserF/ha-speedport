@@ -30,6 +30,10 @@ from .entity import SpeedportEntity
 # Home Assistant runs in an executor, so the event loop never reads tzdata.
 ROUTER_TIME_ZONE = ZoneInfo("Europe/Berlin")
 
+# The router reports 0 dBm for a radio link that is not connected; a real
+# signal strength is always negative.
+SIGNAL_STRENGTH_KEYS = ("ex5g_signal_5g", "ex5g_signal_lte")
+
 
 @dataclass(frozen=True, kw_only=True)
 class SpeedportSensorEntityDescription(SensorEntityDescription):
@@ -347,6 +351,12 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
 
         if val == "":
             return None
+
+        if key in SIGNAL_STRENGTH_KEYS:
+            try:
+                return None if float(val) == 0 else val
+            except TypeError, ValueError:
+                return None
 
         # For numeric data rate sensors, try to return int
         if self.entity_description.native_unit_of_measurement in (

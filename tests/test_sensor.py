@@ -81,3 +81,24 @@ def test_inet_uptime_is_aware_berlin_time(
 def test_inet_uptime_invalid_value_is_none(value: str) -> None:
     """Empty or unparsable timestamps give no value."""
     assert _uptime_sensor(value).native_value is None
+
+
+def _signal_sensor(key: str, value: object) -> SpeedportSensor:
+    coordinator = MagicMock()
+    coordinator.config_entry = MagicMock(entry_id="test_entry")
+    setattr(coordinator.data, key, value)
+    description = next(d for d in SENSORS if d.key == key)
+    return SpeedportSensor(coordinator, description)
+
+
+@pytest.mark.parametrize("key", ["ex5g_signal_5g", "ex5g_signal_lte"])
+@pytest.mark.parametrize("value", ["0", "0.0", 0, "", "n/a"])
+def test_signal_strength_disconnected_is_none(key: str, value: object) -> None:
+    """0 dBm means the radio link is down, so the sensor has no value."""
+    assert _signal_sensor(key, value).native_value is None
+
+
+@pytest.mark.parametrize("key", ["ex5g_signal_5g", "ex5g_signal_lte"])
+def test_signal_strength_connected_is_passed_through(key: str) -> None:
+    """A real (negative) signal strength is reported unchanged."""
+    assert _signal_sensor(key, "-92").native_value == "-92"
