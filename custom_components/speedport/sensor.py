@@ -355,7 +355,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
         ):
             try:
                 return int(val) if val is not None else None
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 return None
 
         # Handle timestamp sensors
@@ -366,7 +366,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
                     second=0
                 )
                 return date.replace(tzinfo=ROUTER_TIME_ZONE)
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 return None
 
         return val
@@ -458,5 +458,5 @@ class SpeedportMeshNodeSensor(SpeedportEntity, SensorEntity):
             if not val:
                 return None
             return round(int(val) / 1000000, 2)
-        except ValueError, TypeError, AttributeError:
+        except (ValueError, TypeError, AttributeError):
             return None
