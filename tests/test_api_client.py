@@ -1,6 +1,5 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import aiohttp
 import pytest
 
 from custom_components.speedport.api import SpeedportClient
@@ -463,24 +462,17 @@ async def test_encrypted_response_key_fallback():
 
     from unittest.mock import AsyncMock, MagicMock
 
-
     session = AsyncMock()
-
 
     session.cookie_jar = MagicMock()
 
-
     session.cookie_jar._unsafe = True
-
 
     session.close = AsyncMock()
 
-
     session.__aenter__ = AsyncMock(return_value=session)
 
-
     session.__aexit__ = AsyncMock(return_value=None)
-
 
     async with session as session:
         client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
@@ -566,28 +558,21 @@ async def test_per_page_httoken_caching():
 @pytest.mark.asyncio
 async def test_session_expiry_raises_auth_error():
     """Test that session expiry during poll invalidates session and raises SpeedportAuthError."""
-    from custom_components.speedport.api import SpeedportAuthError
-
     from unittest.mock import AsyncMock, MagicMock
 
+    from custom_components.speedport.api import SpeedportAuthError
 
     session = AsyncMock()
 
-
     session.cookie_jar = MagicMock()
-
 
     session.cookie_jar._unsafe = True
 
-
     session.close = AsyncMock()
-
 
     session.__aenter__ = AsyncMock(return_value=session)
 
-
     session.__aexit__ = AsyncMock(return_value=None)
-
 
     async with session as session:
         client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
