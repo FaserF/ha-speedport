@@ -1,6 +1,5 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import aiohttp
 import pytest
 
 from custom_components.speedport.api import SpeedportClient
@@ -12,7 +11,21 @@ ROUTER_PASSWORD = "password"
 @pytest.mark.asyncio
 async def test_login_success_legacy():
     """Test successful legacy login (MD5)."""
-    async with aiohttp.ClientSession() as session:
+    from unittest.mock import AsyncMock, MagicMock
+
+    session = AsyncMock()
+
+    session.cookie_jar = MagicMock()
+
+    session.cookie_jar._unsafe = True
+
+    session.close = AsyncMock()
+
+    session.__aenter__ = AsyncMock(return_value=session)
+
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    async with session as session:
         client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
 
         # 1. Challenge attempt (Modern) - returns Empty [] or fails
@@ -74,7 +87,21 @@ async def test_login_success_legacy():
 @pytest.mark.asyncio
 async def test_get_all_data_fallback():
     """Test data retrieval with Typ B fallback to Login.json."""
-    async with aiohttp.ClientSession() as session:
+    from unittest.mock import AsyncMock, MagicMock
+
+    session = AsyncMock()
+
+    session.cookie_jar = MagicMock()
+
+    session.cookie_jar._unsafe = True
+
+    session.close = AsyncMock()
+
+    session.__aenter__ = AsyncMock(return_value=session)
+
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    async with session as session:
         client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
         client._logged_in = True
 
@@ -142,7 +169,21 @@ async def test_get_all_data_fallback():
 @pytest.mark.asyncio
 async def test_set_wifi():
     """Test switching WiFi."""
-    async with aiohttp.ClientSession() as session:
+    from unittest.mock import AsyncMock, MagicMock
+
+    session = AsyncMock()
+
+    session.cookie_jar = MagicMock()
+
+    session.cookie_jar._unsafe = True
+
+    session.close = AsyncMock()
+
+    session.__aenter__ = AsyncMock(return_value=session)
+
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    async with session as session:
         client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
         client._logged_in = True
 
@@ -170,7 +211,21 @@ async def test_set_wifi():
 @pytest.mark.asyncio
 async def test_logout():
     """Test logout method."""
-    async with aiohttp.ClientSession() as session:
+    from unittest.mock import AsyncMock, MagicMock
+
+    session = AsyncMock()
+
+    session.cookie_jar = MagicMock()
+
+    session.cookie_jar._unsafe = True
+
+    session.close = AsyncMock()
+
+    session.__aenter__ = AsyncMock(return_value=session)
+
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    async with session as session:
         client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
         client._logged_in = True
         client._login_key = "dummy_key"
@@ -201,7 +256,21 @@ async def test_logout():
 @pytest.mark.asyncio
 async def test_buttons_actions():
     """Test button actions: reboot, reconnect, wps_on."""
-    async with aiohttp.ClientSession() as session:
+    from unittest.mock import AsyncMock, MagicMock
+
+    session = AsyncMock()
+
+    session.cookie_jar = MagicMock()
+
+    session.cookie_jar._unsafe = True
+
+    session.close = AsyncMock()
+
+    session.__aenter__ = AsyncMock(return_value=session)
+
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    async with session as session:
         client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
         client._logged_in = True
 
@@ -229,7 +298,21 @@ async def test_buttons_actions():
 @pytest.mark.asyncio
 async def test_modern_ip_data():
     """Test modern router fetching IPData.json and populating IPv4 & IPv6."""
-    async with aiohttp.ClientSession() as session:
+    from unittest.mock import AsyncMock, MagicMock
+
+    session = AsyncMock()
+
+    session.cookie_jar = MagicMock()
+
+    session.cookie_jar._unsafe = True
+
+    session.close = AsyncMock()
+
+    session.__aenter__ = AsyncMock(return_value=session)
+
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    async with session as session:
         client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
         client._logged_in = True
 
@@ -281,7 +364,21 @@ async def test_modern_ip_data():
 @pytest.mark.asyncio
 async def test_totr64_stats():
     """Test ToTR64 SOAP traffic & bandwidth counter retrieval."""
-    async with aiohttp.ClientSession() as session:
+    from unittest.mock import AsyncMock, MagicMock
+
+    session = AsyncMock()
+
+    session.cookie_jar = MagicMock()
+
+    session.cookie_jar._unsafe = True
+
+    session.close = AsyncMock()
+
+    session.__aenter__ = AsyncMock(return_value=session)
+
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    async with session as session:
         client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
 
         soap_response_1 = """<?xml version="1.0" encoding="UTF-8"?>
@@ -363,7 +460,21 @@ async def test_encrypted_response_key_fallback():
     payload = '[{"varid":"lan_ip","varvalue":"192.168.178.1"},{"varid":"homenetwork","varvalue":"online"}]'
     encrypted_with_session_key = _encode(payload, session_key)
 
-    async with aiohttp.ClientSession() as session:
+    from unittest.mock import AsyncMock, MagicMock
+
+    session = AsyncMock()
+
+    session.cookie_jar = MagicMock()
+
+    session.cookie_jar._unsafe = True
+
+    session.close = AsyncMock()
+
+    session.__aenter__ = AsyncMock(return_value=session)
+
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    async with session as session:
         client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
         client._encrypted_mode = True
         client._login_key = session_key
@@ -385,7 +496,21 @@ async def test_encrypted_response_key_fallback():
 @pytest.mark.asyncio
 async def test_per_page_httoken_caching():
     """Test that CSRF tokens are cached per HTML page URL."""
-    async with aiohttp.ClientSession() as session:
+    from unittest.mock import AsyncMock, MagicMock
+
+    session = AsyncMock()
+
+    session.cookie_jar = MagicMock()
+
+    session.cookie_jar._unsafe = True
+
+    session.close = AsyncMock()
+
+    session.__aenter__ = AsyncMock(return_value=session)
+
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    async with session as session:
         client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
 
         mock_resp = MagicMock()
@@ -433,9 +558,23 @@ async def test_per_page_httoken_caching():
 @pytest.mark.asyncio
 async def test_session_expiry_raises_auth_error():
     """Test that session expiry during poll invalidates session and raises SpeedportAuthError."""
+    from unittest.mock import AsyncMock, MagicMock
+
     from custom_components.speedport.api import SpeedportAuthError
 
-    async with aiohttp.ClientSession() as session:
+    session = AsyncMock()
+
+    session.cookie_jar = MagicMock()
+
+    session.cookie_jar._unsafe = True
+
+    session.close = AsyncMock()
+
+    session.__aenter__ = AsyncMock(return_value=session)
+
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    async with session as session:
         client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
         client._logged_in = True
         client._encrypted_mode = True
