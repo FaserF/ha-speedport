@@ -1,0 +1,21 @@
+title: Router
+views:
+  - title: Netzwerk
+    path: netzwerk
+    cards:
+      - type: custom:router-flyout-card
+        image: /local/router-flyout-scene.svg
+        router_image: /local/router-flyout-router.svg
+        entity: sensor.speedport_pro_plus_router_status
+        refresh_entity: button.speedport_pro_plus_routerdetails_aktualisieren
+        status_url: http://speedport.ip/6.5/gui/status/
+        # Bei mehreren Routern die passende HA-Konfigurationseintrags-ID setzen:
+        # entry_id: REPLACE_WITH_CONFIG_ENTRY_ID
+        entity_map:
+          dsl_link: sensor.speedport_pro_plus_dsl_link_status
+          online_status: sensor.speedport_pro_plus_online_status
+          dsl_downstream: sensor.speedport_pro_plus_dsl_downstream_geschwindigkeit
+          dsl_upstream: sensor.speedport_pro_plus_dsl_upstream_geschwindigkeit
+          wlan_24_ghz_ssid: sensor.speedport_pro_plus_wlan_ssid_24_ghz
+          wlan_5_ghz_ssid: sensor.speedport_pro_plus_wlan_ssid_5_ghz
+          connected_devices_count: sensor.speedport_pro_plus_verbundene_gerate

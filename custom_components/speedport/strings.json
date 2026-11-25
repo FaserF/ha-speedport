@@ -92,6 +92,7 @@
       "wifi_office": {"name": "Office WiFi"}
     },
     "button": {
+      "refresh": {"name": "Refresh Router Details"},
       "reboot": {"name": "Reboot Router"},
       "reconnect": {"name": "Reconnect Internet"},
       "wps_on": {"name": "Enable WPS"}

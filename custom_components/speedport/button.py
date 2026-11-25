@@ -24,6 +24,13 @@ class SpeedportButtonDescription(ButtonEntityDescription):
 
 BUTTONS: tuple[SpeedportButtonDescription, ...] = (
     SpeedportButtonDescription(
+        key="refresh",
+        translation_key="refresh",
+        name="Refresh Router Details",
+        icon="mdi:refresh",
+        action="refresh",
+    ),
+    SpeedportButtonDescription(
         key="reboot",
         translation_key="reboot",
         name="Reboot Router",
@@ -83,7 +90,9 @@ class SpeedportButton(SpeedportEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Handle the button press."""
         action = self.entity_description.action
-        if action == "reboot":
+        if action == "refresh":
+            await self.coordinator.async_request_refresh()
+        elif action == "reboot":
             await self._client.reboot()
         elif action == "reconnect":
             await self._client.reconnect()

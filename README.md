@@ -166,4 +166,8 @@ pip install -r requirements_test.txt
 
 ## 📄 License
 
+## Credits & Acknowledgements
+
+- **[stevenrudolphcom/telekom-devices](https://github.com/stevenrudolphcom/telekom-devices)** ([@stevenrudolphcom](https://github.com/stevenrudolphcom)): Contributed the Speedport Pro Plus Sagemcom XMO/SHA-512 integration, `Refresh Router Details` button entity, additional diagnostics redactions, and the optional Lovelace Router Flyout Card.
+
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

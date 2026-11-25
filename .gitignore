@@ -42,6 +42,7 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+node_modules/
 nosetests.xml
 coverage.xml
 *.cover
@@ -171,6 +172,8 @@ Thumbs.db
 /*.html
 /*.json
 !/hacs.json
+!/package.json
+!/package-lock.json
 !/renovate.json
 !/repository.json
 !/manifest.json

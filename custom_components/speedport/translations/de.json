@@ -92,6 +92,7 @@
       "wifi_office": {"name": "Büro-WLAN"}
     },
     "button": {
+      "refresh": {"name": "Routerdetails aktualisieren"},
       "reboot": {"name": "Router neu starten"},
       "reconnect": {"name": "Internet neu verbinden"},
       "wps_on": {"name": "WPS aktivieren"}

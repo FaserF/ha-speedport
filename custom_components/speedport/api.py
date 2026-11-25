@@ -3,6 +3,7 @@
 Supports multiple generations of Speedport routers:
 - Older models (e.g. W 724V): Plain JSON, MD5 login, httoken CSRF.
 - Newer models (e.g. Smart 3/4, Pro): AES-CCM encrypted JSON, SHA256 challenge-response login.
+- Speedport Pro Plus: Sagemcom XMO API with SHA512 challenge-response login.
 """
 
 from __future__ import annotations
@@ -295,10 +296,17 @@ class SpeedportConnectionError(Exception):
     """Cannot connect to router."""
 
 
+from .xmo import (
+    XMO_STATUS_PATHS,
+    SagemcomXmoClient,
+    build_sagemcom_data,
+)
+
+
 class SpeedportClient:
     """API client for Telekom Speedport routers.
 
-    Supports legacy (plain) and modern (encrypted) models.
+    Supports legacy (plain), modern (encrypted), and Sagemcom XMO models.
     """
 
     def __init__(
@@ -318,6 +326,7 @@ class SpeedportClient:
             self._host = host.rstrip("/")
 
         self._password = password
+        self._use_https = use_https
         self._session = session
         if (
             hasattr(self._session, "cookie_jar")
@@ -333,6 +342,8 @@ class SpeedportClient:
             f"https://{self._host}" if use_https else f"http://{self._host}"
         )
         self._logged_in = False
+        self._xmo_api_detected: bool | None = None
+        self._sagemcom_client: SagemcomXmoClient | None = None
         self._login_key: str | None = None  # Challenge key for modern models
         self._encrypted_mode: bool | None = None  # Detected on first request
         self._token: str | None = None  # httoken / _tn for legacy models
@@ -347,9 +358,57 @@ class SpeedportClient:
         self._prev_bytes_sent: int | None = None
         self._prev_bytes_time: float | None = None
 
+    async def _uses_sagemcom_xmo(self) -> bool:
+        """Detect the verified SHA512 XMO login used by Speedport Pro Plus."""
+        if self._xmo_api_detected is not None:
+            return self._xmo_api_detected
+
+        url = f"{self._base_url}/6.5/gui/js/gui-core.js"
+        try:
+            async with self._session.get(
+                url,
+                ssl=False,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status != 200:
+                    self._xmo_api_detected = False
+                    return False
+                source = await response.text(errors="replace")
+        except (TimeoutError, aiohttp.ClientError) as err:
+            raise SpeedportConnectionError(
+                f"Unable to inspect router API at {self._host}: {err}"
+            ) from err
+
+        sha512_enabled = re.search(r"GUI_ACTIVATE_SHA512ENCODE_OPT\s*:\s*1", source)
+        salt_match = re.search(r"""GUI_PASSWORD_SALT\s*:\s*["']([^"']*)["']""", source)
+        self._xmo_api_detected = (
+            "XMO_REMOTE_HOST" in source
+            and sha512_enabled is not None
+            and salt_match is not None
+            and salt_match.group(1) == ""
+        )
+        return self._xmo_api_detected
+
+    def _create_sagemcom_client(self) -> SagemcomXmoClient:
+        """Create a client for the router's native XMO API."""
+        return SagemcomXmoClient(
+            host=self._host,
+            password=self._password,
+            session=self._session,
+            use_https=self._use_https,
+        )
+
     async def logout(self) -> None:
         """Log out from the Speedport."""
         if not self._logged_in:
+            return
+        if self._sagemcom_client is not None:
+            try:
+                await self._sagemcom_client.logout()
+            except Exception as exc:
+                _LOGGER.debug("XMO logout failed: %s", exc)
+            finally:
+                self._logged_in = False
             return
         try:
             # Use unencrypted logout POST — the encrypted variant (auth=True) consistently
@@ -633,6 +692,10 @@ class SpeedportClient:
 
     async def set_wifi_guest(self, on: bool) -> bool:
         """Turn Guest WiFi on or off."""
+        if self._sagemcom_client is not None:
+            raise SpeedportConnectionError(
+                "Guest Wi-Fi control is not available for the Speedport XMO API"
+            )
         await self._ensure_auth()
         referer = "html/content/network/wlan_guest.html"
         data = {"wlan_guest_active": "1" if on else "0"}
@@ -648,6 +711,10 @@ class SpeedportClient:
 
     async def set_wifi_office(self, on: bool) -> bool:
         """Turn Office WiFi on or off."""
+        if self._sagemcom_client is not None:
+            raise SpeedportConnectionError(
+                "Office Wi-Fi control is not available for the Speedport XMO API"
+            )
         await self._ensure_auth()
         referer = "html/content/network/wlan_office.html"
         data = {"wlan_office_active": "1" if on else "0"}
@@ -665,6 +732,10 @@ class SpeedportClient:
         self, data: dict[str, str], referer: str = "html/content/overview/index.html"
     ) -> bool:
         """Set a module state via Modules.json."""
+        if self._sagemcom_client is not None:
+            raise SpeedportConnectionError(
+                "Wi-Fi control is not available for the Speedport XMO API"
+            )
         await self._ensure_auth()
         result = await self._post_json(
             "data/Modules.json", data, referer=referer, auth=True
@@ -689,9 +760,19 @@ class SpeedportClient:
         return result.get("challenge")
 
     async def login(self) -> None:
-        """Authenticate with the router (supports Legacy MD5 and Modern SHA256)."""
+        """Authenticate using the protocol exposed by the router firmware."""
         self._logged_in = False
         self._login_key = None
+
+        if await self._uses_sagemcom_xmo():
+            if self._sagemcom_client is None:
+                self._sagemcom_client = self._create_sagemcom_client()
+            await self._sagemcom_client.login()
+            self._logged_in = True
+            _LOGGER.info(
+                "Successfully logged in to Speedport XMO API at %s", self._host
+            )
+            return
 
         # First, try to get a challenge (Modern detection)
         try:
@@ -794,6 +875,11 @@ class SpeedportClient:
 
     async def get_all_data(self) -> SpeedportData:
         """Fetch all available data from the router."""
+        if await self._uses_sagemcom_xmo():
+            if not self._logged_in or self._sagemcom_client is None:
+                await self.login()
+            return await self._get_sagemcom_data()
+
         raw: dict[str, Any] = {}
 
         # 1. ToTR64 / CWMP Traffic & Bandwidth stats (Port 5438)
@@ -1472,8 +1558,33 @@ class SpeedportClient:
             or any(result.get(k) == v for k, v in success_keys.items())
         )
 
+    async def _get_sagemcom_data(self) -> SpeedportData:
+        """Fetch the fields displayed by the Pro Plus status page via XMO."""
+        if self._sagemcom_client is None:
+            raise SpeedportConnectionError("The XMO client is not initialized")
+
+        try:
+            values = await self._sagemcom_client.get_values_by_xpaths(
+                XMO_STATUS_PATHS,
+                ignore_unknown_paths=True,
+            )
+            host_data = await self._sagemcom_client.get_values_by_xpaths(
+                {"hosts": "Device/Hosts/Hosts"},
+                options={"capability-flags": {"interface": True}},
+                ignore_unknown_paths=True,
+            )
+        except SpeedportAuthError:
+            self._logged_in = False
+            raise
+
+        return build_sagemcom_data(values, host_data)
+
     async def reconnect(self) -> bool:
         """Reconnect the internet connection."""
+        if self._sagemcom_client is not None:
+            raise SpeedportConnectionError(
+                "Internet reconnect is not available for the Speedport XMO API"
+            )
         return await self._post_with_retry(
             "data/Connect.json",
             {"req_connect": "reconnect"},
@@ -1483,6 +1594,10 @@ class SpeedportClient:
 
     async def reboot(self) -> bool:
         """Reboot the router."""
+        if self._sagemcom_client is not None:
+            if not self._logged_in:
+                await self.login()
+            return bool(await self._sagemcom_client.reboot())
         return await self._post_with_retry(
             "data/Reboot.json",
             {"reboot_device": "true"},
@@ -1492,6 +1607,10 @@ class SpeedportClient:
 
     async def wps_on(self) -> bool:
         """Activate WPS."""
+        if self._sagemcom_client is not None:
+            raise SpeedportConnectionError(
+                "WPS control is not available for the Speedport XMO API"
+            )
         return await self._post_with_retry(
             "data/WLANAccess.json",
             {"wlan_add": "on", "wps_key": "connect"},
@@ -1501,6 +1620,8 @@ class SpeedportClient:
 
     async def get_update_info(self, check: bool = False) -> dict[str, Any]:
         """Get firmware update information."""
+        if self._sagemcom_client is not None:
+            return {}
         await self._ensure_auth()
         if check:
             with suppress(Exception):
@@ -1516,6 +1637,10 @@ class SpeedportClient:
 
     async def install_update(self) -> bool:
         """Trigger firmware update installation."""
+        if self._sagemcom_client is not None:
+            raise SpeedportConnectionError(
+                "Firmware updates are not available through the Speedport XMO API"
+            )
         await self._ensure_auth()
         result = await self._post_json(
             "data/Update.json",

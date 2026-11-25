@@ -73,6 +73,9 @@ TO_REDACT: set[str] = {
     "wlan_5ghz_ssid",
     "wlan_guest_ssid",
     "wlan_office_ssid",
+    "wifi_gaming_ssid",
+    "wlan_guest_24_ssid",
+    "wlan_guest_5_ssid",
     "ssid",
     "ssid_24g",
     "ssid_5g",
@@ -130,6 +133,8 @@ TO_REDACT: set[str] = {
     "mdevice_hostname",
     "device_name_client",
     "hostname",
+    "device_hostname",
+    "router_hostname",
     # Session / CSRF tokens
     "httoken",
     "_httoken",
