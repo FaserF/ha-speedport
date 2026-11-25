@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 import aiohttp
 
-from .api import (
+from .models import (
     SpeedportAuthError,
     SpeedportConnectionError,
     SpeedportData,
