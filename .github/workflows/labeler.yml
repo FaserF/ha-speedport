@@ -15,7 +15,7 @@ jobs:
   label:
     runs-on: ${{ (github.event.repository.private == true || vars.FORCE_SELF_HOSTED_RUNNER == 'true' || vars.USE_SELF_HOSTED_RUNNERS == 'true' || vars.USE_GITHUB_RUNNERS == 'false') && fromJSON('["self-hosted", "linux"]') || 'ubuntu-latest' }}
     steps:
-      - uses: actions/labeler@v7
+      - uses: actions/labeler@v7.0.0
         if: github.event_name == 'pull_request_target'
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -24,7 +24,7 @@ jobs:
 
       - name: Label Issues
         if: github.event_name == 'issues'
-        uses: actions/github-script@v9
+        uses: actions/github-script@v9.0.0
         with:
           script: |
             const issue = context.payload.issue;
