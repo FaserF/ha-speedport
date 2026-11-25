@@ -8,6 +8,8 @@ from typing import Any
 from homeassistant.components.device_tracker import ScannerEntity, SourceType
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -118,6 +120,14 @@ class SpeedportDeviceTracker(
     def source_type(self) -> SourceType:
         """Return the source type."""
         return SourceType.ROUTER
+
+    @property  # type: ignore[misc]
+    def device_info(self) -> DeviceInfo:
+        """Return device info with the tracked device MAC connection."""
+        return DeviceInfo(
+            connections={(dr.CONNECTION_NETWORK_MAC, dr.format_mac(self._mac))},
+            name=self.hostname or f"Speedport Client {self._mac}",
+        )
 
     @property
     def ip_address(self) -> str | None:
