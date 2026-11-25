@@ -354,7 +354,7 @@ class SpeedportSensor(SpeedportEntity, SensorEntity):
 
         if key in SIGNAL_STRENGTH_KEYS:
             try:
-                return None if float(val) == 0 else val
+                return None if val is None or float(val) == 0 else val
             except TypeError, ValueError:
                 return None
 
