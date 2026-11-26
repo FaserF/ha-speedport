@@ -94,7 +94,7 @@ class SpeedportConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
                     data={
                         CONF_HOST: host,
                         CONF_PASSWORD: password,
-                        CONF_USE_HTTPS: use_https,
+                        CONF_USE_HTTPS: client.use_https,
                     },
                 )
 
@@ -146,7 +146,7 @@ class SpeedportConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
                     data={
                         CONF_HOST: host,
                         CONF_PASSWORD: password,
-                        CONF_USE_HTTPS: use_https,
+                        CONF_USE_HTTPS: client.use_https,
                     },
                 )
 
@@ -198,6 +198,7 @@ class SpeedportConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
                     data={
                         **reauth_entry.data,
                         CONF_PASSWORD: password,
+                        CONF_USE_HTTPS: client.use_https,
                     },
                 )
 

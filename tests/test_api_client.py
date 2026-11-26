@@ -639,3 +639,236 @@ async def test_cookie_jar_unsafe_set_for_ip():
     client = SpeedportClient("192.168.2.1", ROUTER_PASSWORD, session)
     assert client is not None
     assert session.cookie_jar._unsafe is True
+
+
+@pytest.mark.asyncio
+async def test_smart4r_encrypted_challenge_and_httoken_login():
+    """Smart 4R Typ A requires AES-CCM encrypted getChallenge with httoken and Referer."""
+    from hashlib import sha256
+
+    from custom_components.speedport.api import DEFAULT_KEY, _decode, _encode
+
+    session = AsyncMock()
+    session.cookie_jar = MagicMock()
+    session.cookie_jar._unsafe = True
+    session.close = AsyncMock()
+
+    challenge = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
+    expected_pw_hash = sha256(f"{challenge}:{ROUTER_PASSWORD}".encode()).hexdigest()
+    captured_posts: list[tuple[str, str, dict]] = []
+
+    client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
+
+    def _resp(text: str = "", raw: bytes = b"") -> MagicMock:
+        r = MagicMock()
+        r.status = 404
+        r.url = URL = MagicMock()
+        URL.scheme = "http"
+        r.read = AsyncMock(return_value=raw)
+        r.text = AsyncMock(return_value=text)
+        r.__aenter__ = AsyncMock(return_value=r)
+        r.__aexit__ = AsyncMock(return_value=None)
+        return r
+
+    def mock_get(url, *args, **kwargs):
+        url_str = str(url)
+        if "html/login/index.html" in url_str:
+            return _resp(raw=b"var _httoken = 424242;")
+        if "html/content/overview/index.html" in url_str:
+            return _resp(raw=b"var _httoken = 999999;")
+        return _resp()
+
+    def mock_post(url, *args, **kwargs):
+        body = kwargs.get("data", "")
+        headers = kwargs.get("headers", {})
+        decoded = _decode(body, DEFAULT_KEY) if isinstance(body, str) else body
+        captured_posts.append((str(url), str(decoded), headers))
+        if "getChallenge=1" in str(decoded) and "httoken=424242" in str(decoded):
+            enc = _encode(
+                f'[{{"varid":"challenge","varvalue":"{challenge}"}}]', DEFAULT_KEY
+            )
+            return _resp(text=enc)
+        if f"password={expected_pw_hash}" in str(decoded) and "httoken=424242" in str(
+            decoded
+        ):
+            enc = _encode('[{"varid":"login","varvalue":"success"}]', DEFAULT_KEY)
+            return _resp(text=enc)
+        return _resp(text="[]")
+
+    session.get = MagicMock(side_effect=mock_get)  # type: ignore[method-assign]
+    session.post = MagicMock(side_effect=mock_post)  # type: ignore[method-assign]
+
+    await client.login()
+    assert client.is_logged_in is True
+    assert client._encrypted_mode is True
+    assert len(captured_posts) == 2
+    assert captured_posts[0][2].get("Referer", "").endswith("/html/login/index.html")
+
+
+@pytest.mark.asyncio
+async def test_http_to_https_redirect_upgrades_client():
+    """HTTP -> HTTPS redirect upgrades use_https and _base_url before login POSTs."""
+    from yarl import URL
+
+    from custom_components.speedport.api import DEFAULT_KEY, _encode
+
+    session = AsyncMock()
+    session.cookie_jar = MagicMock()
+    session.cookie_jar._unsafe = True
+    session.close = AsyncMock()
+
+    challenge = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+    client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session, use_https=False)
+
+    def _resp(url_str: str, text: str = "", raw: bytes = b"") -> MagicMock:
+        r = MagicMock()
+        r.status = 404
+        r.url = URL(url_str)
+        r.read = AsyncMock(return_value=raw)
+        r.text = AsyncMock(return_value=text)
+        r.__aenter__ = AsyncMock(return_value=r)
+        r.__aexit__ = AsyncMock(return_value=None)
+        return r
+
+    post_urls: list[str] = []
+
+    def mock_get(url, *args, **kwargs):
+        url_str = str(url)
+        if "gui-core.js" in url_str:
+            return _resp(f"https://{ROUTER_HOST}/html/login/index.html")
+        return _resp(
+            f"https://{ROUTER_HOST}/html/login/index.html", raw=b"_httoken = 111;"
+        )
+
+    def mock_post(url, *args, **kwargs):
+        post_urls.append(str(url))
+        if len(post_urls) == 1:
+            return _resp(
+                str(url),
+                text=_encode(
+                    f'[{{"varid":"challenge","varvalue":"{challenge}"}}]', DEFAULT_KEY
+                ),
+            )
+        return _resp(
+            str(url),
+            text=_encode('[{"varid":"login","varvalue":"success"}]', DEFAULT_KEY),
+        )
+
+    session.get = MagicMock(side_effect=mock_get)  # type: ignore[method-assign]
+    session.post = MagicMock(side_effect=mock_post)  # type: ignore[method-assign]
+
+    await client.login()
+    assert client.use_https is True
+    assert client._base_url == f"https://{ROUTER_HOST}"
+    assert all(u.startswith(f"https://{ROUTER_HOST}/") for u in post_urls)
+
+
+@pytest.mark.asyncio
+async def test_login_locked_short_retry_and_long_lockout():
+    """Short login_locked waits and retries once; long lockout raises SpeedportAuthError."""
+    from custom_components.speedport.api import (
+        DEFAULT_KEY,
+        SpeedportAuthError,
+        _encode,
+    )
+
+    session = AsyncMock()
+    session.cookie_jar = MagicMock()
+    session.cookie_jar._unsafe = True
+    session.close = AsyncMock()
+
+    challenge = "1111111122222222333333334444444411111111222222223333333344444444"
+    client = SpeedportClient(ROUTER_HOST, ROUTER_PASSWORD, session)
+
+    def _resp(text: str = "", raw: bytes = b"") -> MagicMock:
+        r = MagicMock()
+        r.status = 404
+        r.url = None
+        r.read = AsyncMock(return_value=raw)
+        r.text = AsyncMock(return_value=text)
+        r.__aenter__ = AsyncMock(return_value=r)
+        r.__aexit__ = AsyncMock(return_value=None)
+        return r
+
+    responses = [
+        _resp(
+            text=_encode(
+                f'[{{"varid":"challenge","varvalue":"{challenge}"}}]', DEFAULT_KEY
+            )
+        ),
+        _resp(text=_encode('[{"varid":"login_locked","varvalue":"2"}]', DEFAULT_KEY)),
+        _resp(
+            text=_encode(
+                f'[{{"varid":"challenge","varvalue":"{challenge}"}}]', DEFAULT_KEY
+            )
+        ),
+        _resp(text=_encode('[{"varid":"login","varvalue":"success"}]', DEFAULT_KEY)),
+    ]
+
+    session.get = MagicMock(return_value=_resp(raw=b"_httoken = 555;"))  # type: ignore[method-assign]
+    session.post = MagicMock(side_effect=responses)  # type: ignore[method-assign]
+
+    with patch(
+        "custom_components.speedport.api.asyncio.sleep", AsyncMock()
+    ) as mock_sleep:
+        await client.login()
+        assert client.is_logged_in is True
+        mock_sleep.assert_awaited_once_with(3)
+
+    # Now test long lockout (> 15s) raises immediately without falling back to MD5
+    responses_long = [
+        _resp(
+            text=_encode(
+                f'[{{"varid":"challenge","varvalue":"{challenge}"}}]', DEFAULT_KEY
+            )
+        ),
+        _resp(text=_encode('[{"varid":"login_locked","varvalue":"120"}]', DEFAULT_KEY)),
+    ]
+    session.post = MagicMock(side_effect=responses_long)  # type: ignore[method-assign]
+    with pytest.raises(SpeedportAuthError, match="locked"):
+        await client.login()
+    assert session.post.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_encrypted_auth_error_skips_legacy_fallback():
+    """Explicit encrypted login failure raises SpeedportAuthError instead of retrying MD5."""
+    from custom_components.speedport.api import (
+        DEFAULT_KEY,
+        SpeedportAuthError,
+        _encode,
+    )
+
+    session = AsyncMock()
+    session.cookie_jar = MagicMock()
+    session.cookie_jar._unsafe = True
+    session.close = AsyncMock()
+
+    challenge = "2222222233333333444444445555555522222222333333334444444455555555"
+    client = SpeedportClient(ROUTER_HOST, "wrong_pw", session)
+
+    def _resp(text: str = "", raw: bytes = b"") -> MagicMock:
+        r = MagicMock()
+        r.status = 404
+        r.url = None
+        r.read = AsyncMock(return_value=raw)
+        r.text = AsyncMock(return_value=text)
+        r.__aenter__ = AsyncMock(return_value=r)
+        r.__aexit__ = AsyncMock(return_value=None)
+        return r
+
+    session.get = MagicMock(return_value=_resp(raw=b"_httoken = 777;"))  # type: ignore[method-assign]
+    session.post = MagicMock(  # type: ignore[method-assign]
+        side_effect=[
+            _resp(
+                text=_encode(
+                    f'[{{"varid":"challenge","varvalue":"{challenge}"}}]', DEFAULT_KEY
+                )
+            ),
+            _resp(text=_encode('[{"varid":"login","varvalue":"failed"}]', DEFAULT_KEY)),
+        ]
+    )
+
+    with pytest.raises(SpeedportAuthError, match="Invalid"):
+        await client.login()
+    assert session.post.call_count == 2

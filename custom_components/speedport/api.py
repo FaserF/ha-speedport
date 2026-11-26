@@ -16,6 +16,7 @@ import time
 from contextlib import suppress
 from hashlib import md5, sha256
 from typing import Any, cast
+from urllib.parse import urlencode
 
 import aiohttp
 from Crypto.Cipher import AES
@@ -210,6 +211,7 @@ class SpeedportClient:
                 ssl=False,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
+                self._maybe_upgrade_https(response)
                 if response.status != 200:
                     self._xmo_api_detected = False
                     return False
@@ -310,6 +312,25 @@ class SpeedportClient:
         """Return True if authenticated."""
         return self._logged_in
 
+    @property
+    def use_https(self) -> bool:
+        """Return True if HTTPS is enabled or detected via redirect."""
+        return self._use_https
+
+    def _maybe_upgrade_https(self, response: Any) -> None:
+        """Upgrade client base URL to HTTPS when the router redirects HTTP to HTTPS."""
+        if self._use_https:
+            return
+        resp_url = getattr(response, "url", None)
+        if resp_url is not None and getattr(resp_url, "scheme", None) == "https":
+            _LOGGER.debug(
+                "Speedport host %s redirected to HTTPS, upgrading base URL",
+                self._host,
+            )
+            self._use_https = True
+            self._base_url = f"https://{self._host}"
+            self._cached_httokens.clear()
+
     def _req_kwargs(self) -> dict[str, Any]:
         """Default request kwargs with browser-like headers."""
         return {
@@ -353,6 +374,7 @@ class SpeedportClient:
                 ssl=False,
                 timeout=aiohttp.ClientTimeout(total=5),
             ) as resp:
+                self._maybe_upgrade_https(resp)
                 raw = await resp.read()
                 text = raw.decode("latin-1", errors="replace")
                 if match := re.search(
@@ -398,6 +420,7 @@ class SpeedportClient:
                 headers=headers,
                 **{k: v for k, v in kwargs.items() if k != "headers"},
             ) as resp:
+                self._maybe_upgrade_https(resp)
                 text = await resp.text(errors="replace")
 
                 # Robust parsing: if it redirects to login, the token has expired.
@@ -480,7 +503,7 @@ class SpeedportClient:
         elif hasattr(self, "_token") and self._token and not self._encrypted_mode:
             data = {**data, "_tn": self._token}
 
-        body_str = "&".join(f"{k}={v}" for k, v in data.items())
+        body_str = urlencode(data)
         key = (
             self._login_key if (auth and self._encrypted_mode) else None
         ) or DEFAULT_KEY
@@ -504,6 +527,7 @@ class SpeedportClient:
                 headers=headers,
                 **{k: v for k, v in kwargs.items() if k != "headers"},
             ) as resp:
+                self._maybe_upgrade_https(resp)
                 text = await resp.text(errors="replace")
 
                 # Detect session expiry in POST responses (router redirects to login)
@@ -592,12 +616,77 @@ class SpeedportClient:
             )
         return bool(result) or result.get("status") == "ok"
 
+    @staticmethod
+    def _extract_login_locked_seconds(result: dict[str, Any]) -> int | None:
+        """Extract remaining login lockout seconds from router response, if any."""
+        raw_lock = result.get("login_locked")
+        if raw_lock in (None, "", 0, "0", False):
+            return None
+        try:
+            lock_secs = int(str(raw_lock).strip())
+        except ValueError, TypeError:
+            return None
+        return lock_secs if lock_secs > 0 else None
+
+    @classmethod
+    def _is_login_locked_or_error(cls, result: dict[str, Any]) -> bool:
+        """Return True if login response explicitly reports lockout or auth error."""
+        if cls._extract_login_locked_seconds(result) is not None:
+            return True
+        login_state = str(result.get("login", "")).lower()
+        return login_state in ("failed", "wrong", "error") or bool(
+            result.get("login_error")
+        )
+
     async def _get_challenge(self) -> str | None:
-        """Get login challenge (Modern)."""
-        data = {"getChallenge": "1"}
-        # referer="" to avoid producing a double-slash URL (http://router-ip//)
-        result = await self._post_json("data/Login.json", data, referer="", auth=False)
-        return result.get("challenge")
+        """Get login challenge (Modern), trying AES-CCM encrypted request first."""
+        login_page = f"{self._base_url}/html/login/index.html"
+        root_page = f"{self._base_url}/"
+        referer_url = login_page
+        token = await self._get_httoken(login_page, no_cache=True)
+        if not token:
+            token = await self._get_httoken(root_page, no_cache=True)
+            if token:
+                referer_url = root_page
+
+        payload: dict[str, str] = {"getChallenge": "1"}
+        if token:
+            payload["httoken"] = token
+
+        kwargs = self._req_kwargs()
+        headers = dict(kwargs.get("headers", {}))
+        headers["X-Requested-With"] = "XMLHttpRequest"
+        headers["Referer"] = referer_url
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+        encrypted_body = _encode(urlencode(payload), DEFAULT_KEY)
+
+        try:
+            async with self._session.post(
+                f"{self._base_url}/data/Login.json",
+                data=encrypted_body,
+                headers=headers,
+                **{k: v for k, v in kwargs.items() if k != "headers"},
+            ) as resp:
+                self._maybe_upgrade_https(resp)
+                text = await resp.text(errors="replace")
+                parsed = _parse_response(text, key=DEFAULT_KEY)
+                if challenge := parsed.get("challenge"):
+                    self._encrypted_mode = True
+                    return str(challenge)
+        except aiohttp.ClientError as exc:
+            raise SpeedportConnectionError(
+                f"POST {self._base_url}/data/Login.json failed: {exc}"
+            ) from exc
+        except Exception as exc:
+            _LOGGER.debug("Encrypted getChallenge attempt failed: %s", exc)
+
+        # Fallback to plain challenge request for older firmware / unencrypted models
+        plain_data = {"getChallenge": "1"}
+        result = await self._post_json(
+            "data/Login.json", plain_data, referer="", auth=False
+        )
+        challenge_val = result.get("challenge")
+        return str(challenge_val) if challenge_val else None
 
     async def login(self) -> None:
         """Authenticate using the protocol exposed by the router firmware."""
@@ -616,8 +705,10 @@ class SpeedportClient:
 
         # First, try to get a challenge (Modern detection)
         try:
-            challenge = await self._get_challenge()
-            if challenge:
+            for lock_attempt in range(2):
+                challenge = await self._get_challenge()
+                if not challenge:
+                    break
                 self._encrypted_mode = True
                 self._login_key = challenge
                 # Compute SHA256 hash: challenge:password
@@ -625,8 +716,31 @@ class SpeedportClient:
                 password_hash = sha256(auth_str).hexdigest()
                 data = {"showpw": "0", "password": password_hash}
                 result = await self._post_json(
-                    "data/Login.json", data, referer="", auth=False
+                    "data/Login.json",
+                    data,
+                    referer="html/login/index.html",
+                    auth=False,
                 )
+                if result.get(
+                    "login"
+                ) != "success" and not self._is_login_locked_or_error(result):
+                    result = await self._post_json(
+                        "data/Login.json", data, referer="", auth=False
+                    )
+
+                lock_seconds = self._extract_login_locked_seconds(result)
+                if lock_seconds is not None and lock_seconds > 0:
+                    if lock_attempt == 0 and lock_seconds <= 15:
+                        _LOGGER.debug(
+                            "Speedport login temporarily locked for %ss; waiting to retry",
+                            lock_seconds,
+                        )
+                        await asyncio.sleep(lock_seconds + 1)
+                        continue
+                    raise SpeedportAuthError(
+                        f"Speedport login is locked for {lock_seconds} seconds"
+                    )
+
                 if result.get("login") == "success":
                     self._logged_in = True
                     _LOGGER.info(
@@ -641,8 +755,12 @@ class SpeedportClient:
                             force_refresh=True,
                         )
                     return
-        except SpeedportConnectionError:
-            # Re-raise connection error immediately to fail fast when host is unreachable
+
+                if self._is_login_locked_or_error(result):
+                    raise SpeedportAuthError("Invalid router password")
+                break
+        except SpeedportConnectionError, SpeedportAuthError:
+            # Re-raise connection/auth errors immediately without falling back to MD5
             raise
         except Exception as exc:
             _LOGGER.debug(
